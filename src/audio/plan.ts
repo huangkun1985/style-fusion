@@ -17,8 +17,12 @@ export interface AudioPlan {
   /** null＝關閉音效 */
   pack: PackId | null;
   song: Song;
-  /** 內容識別：相同代表同一首歌、同一個方案，不必重新渲染 */
+  /** 內容識別：任何設定（含音效包）都一樣才相同 */
   key: string;
+  /** 「同一首歌」的識別：曲風、種子、速度、調性、動畫長度…都一樣（與聲音方案、音效包無關） */
+  songKey: string;
+  /** 「同一段音樂聲音」的識別：歌 + 聲音方案。相同就不必重新渲染（音效包不影響音樂） */
+  musicKey: string;
   animSeconds: number;
 }
 
@@ -64,7 +68,9 @@ export function planAudio(i: PlanInput): AudioPlan {
   const pack = prefs.pack === 'off' ? null : prefs.pack === 'auto' ? prof.pack : prefs.pack;
   const L = loopSeconds(SUBJECTS[subject], baseMove, tune);
   const preferLock = baseMove.beat > 0.05 || baseMove.zoomPunch > 0.05;
-  const key = [genre, scheme, pack, prefs.seed, prefs.sync, r3(prefs.tempo), prefs.key, r3(L), r3(prof.tempoMul), r3(prof.energyMul), preferLock].join('|');
+  const songKey = [genre, prefs.seed, prefs.sync, r3(prefs.tempo), prefs.key, r3(L), r3(prof.tempoMul), r3(prof.energyMul), preferLock].join('|');
+  const musicKey = `${songKey}|${scheme}`;
+  const key = `${musicKey}|${pack}`;
   const hit = memo.get(key);
   // 同一首歌可能對應不同風格組合；理由文字要跟著目前的組合走
   if (hit) return { ...hit, profile: prof };
@@ -79,7 +85,7 @@ export function planAudio(i: PlanInput): AudioPlan {
     energyMul: prof.energyMul,
     preferLock,
   });
-  const plan: AudioPlan = { profile: prof, genre, scheme, pack, song, key, animSeconds: L };
+  const plan: AudioPlan = { profile: prof, genre, scheme, pack, song, key, songKey, musicKey, animSeconds: L };
   if (memo.size > 60) memo.clear();
   memo.set(key, plan);
   return plan;

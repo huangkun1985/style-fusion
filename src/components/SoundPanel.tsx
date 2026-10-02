@@ -141,6 +141,8 @@ function PianoRoll({ song }: { song: Song }) {
 
 // ---------- 主面板 ----------
 export function SoundTab() {
+  // 試聽只在這個分頁裡有控制鈕；離開分頁就停止，避免忘了關
+  useEffect(() => () => audioEngine.stopAudition(), []);
   const { plan, prefs } = useAudioPlan();
   const setAudio = useStore((s) => s.setAudio);
   const showToast = useStore((s) => s.showToast);
@@ -226,7 +228,7 @@ export function SoundTab() {
 
       {/* 聲音方案 */}
       <div>
-        <SectionTitle>聲音方案</SectionTitle>
+        <SectionTitle right={status.audition ? <span className="text-[11px] text-mot">試聽中 · 換曲風、調性或速度會自動跟著換</span> : undefined}>聲音方案</SectionTitle>
         <AutoRow on={prefs.scheme === 'auto'} onClick={() => setAudio({ scheme: 'auto' })} now={SCHEME_INFO[effScheme].name} />
         <div className="mt-1.5 grid grid-cols-2 gap-1.5">
           {schemeIds.map((id) => {

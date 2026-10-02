@@ -52,6 +52,10 @@ class AudioEngine {
   private lastT = -1;
   private lastPlaying = false;
   private audition: AudioBufferSourceNode | null = null;
+  private auditionGain: GainNode | null = null;
+  private auditionTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 最近渲染過的音樂（BGM 與試聽共用，同一首歌不會算兩次；也讓來回切換曲風時秒切） */
+  private renders = new Map<string, { p: Promise<Stereo>; ms: number }>();
   private listeners = new Set<() => void>();
   private waiting: Array<() => void> = [];
   status: EngineStatus = { building: false, ready: false, error: null, renderMs: 0, ctxState: 'none', scheme: null, audition: null };
@@ -107,11 +111,13 @@ class AudioEngine {
     const on = this.prefs.on;
     const t = this.ctx.currentTime;
     this.bgmGain.gain.setTargetAtTime(on && this.prefs.bgm ? this.prefs.bgmVol : 0, t, 0.03);
+    this.auditionGain?.gain.setTargetAtTime(this.prefs.bgmVol, t, 0.03);
     this.sfxGain.gain.setTargetAtTime(on && this.prefs.sfx ? this.prefs.sfxVol : 0, t, 0.03);
   }
 
   configure(s: ScenePatch) {
     const prevPlan = this.plan;
+    const wasOn = this.prefs.on;
     this.scene = s;
     this.prefs = s.prefs;
     this.plan = s.plan;
@@ -121,12 +127,38 @@ class AudioEngine {
       this.trackerKey = tk;
     }
     this.applyGains();
+    // 試聽中換了曲風、調性、速度、種子…：試聽跟著換成新的歌，不必先停止再重按
+    if (prevPlan && prevPlan.songKey !== s.plan.songKey && this.status.audition) this.followAudition();
+    // 主開關從開變關：連試聽一起停
+    if (wasOn && !s.prefs.on && this.status.audition) this.stopAudition();
     const wantBgm = s.prefs.on && s.prefs.bgm;
     if (!wantBgm) {
       this.stopBgm();
-    } else if (!prevPlan || prevPlan.key !== s.plan.key || this.pcmKey !== s.plan.key) {
+    } else if (!prevPlan || prevPlan.musicKey !== s.plan.musicKey || this.pcmKey !== s.plan.musicKey) {
       this.scheduleBuild();
     }
+  }
+
+  // ---------- 渲染（含快取） ----------
+  /** 把這首歌用指定的聲音方案渲染出來。同一首歌 + 同一方案只算一次（有最近 4 筆的快取） */
+  private renderFor(plan: AudioPlan, scheme: SchemeId): { p: Promise<Stereo>; ms: number } {
+    const key = `${plan.songKey}|${scheme}`;
+    const hit = this.renders.get(key);
+    if (hit) {
+      this.renders.delete(key);
+      this.renders.set(key, hit);
+      return hit;
+    }
+    const entry = { p: null as unknown as Promise<Stereo>, ms: 0 };
+    const t0 = performance.now();
+    entry.p = renderScheme(plan.song, scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true }).then((pcm) => {
+      entry.ms = Math.round(performance.now() - t0);
+      return pcm;
+    });
+    this.renders.set(key, entry);
+    entry.p.catch(() => this.renders.delete(key));
+    while (this.renders.size > 4) this.renders.delete(this.renders.keys().next().value as string);
+    return entry;
   }
 
   // ---------- 渲染 BGM ----------
@@ -140,23 +172,23 @@ class AudioEngine {
   async build(): Promise<Stereo | null> {
     const plan = this.plan;
     if (!plan) return null;
-    if (this.pcm && this.pcmKey === plan.key) {
+    if (this.pcm && this.pcmKey === plan.musicKey) {
       this.setStatus({ building: false, ready: true });
       return this.pcm;
     }
     const token = ++this.token;
     this.setStatus({ building: true, error: null });
     try {
-      const t0 = performance.now();
-      const pcm = await renderScheme(plan.song, plan.scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true });
+      const r = this.renderFor(plan, plan.scheme);
+      const pcm = await r.p;
       if (token !== this.token) return null;
       this.pcm = pcm;
-      this.pcmKey = plan.key;
+      this.pcmKey = plan.musicKey;
       this.pcmScheme = plan.scheme;
       this.buf = null;
       if (this.ctx) this.makeBuffer(pcm);
       this.stopBgm(true);
-      this.setStatus({ building: false, ready: true, renderMs: Math.round(performance.now() - t0), scheme: plan.scheme });
+      this.setStatus({ building: false, ready: true, renderMs: r.ms, scheme: plan.scheme });
       const resolve = this.waiting.splice(0);
       resolve.forEach((f) => f());
       return pcm;
@@ -175,7 +207,7 @@ class AudioEngine {
   }
 
   currentPcm(): { pcm: Stereo; plan: AudioPlan } | null {
-    return this.pcm && this.plan && this.pcmKey === this.plan.key ? { pcm: this.pcm, plan: this.plan } : null;
+    return this.pcm && this.plan && this.pcmKey === this.plan.musicKey ? { pcm: this.pcm, plan: this.plan } : null;
   }
 
   /** 等到目前計畫的 BGM 渲染完成（導出用） */
@@ -284,43 +316,89 @@ class AudioEngine {
   }
 
   /**
-   * 試聽：不看時間軸，直接播一次目前這首（或指定方案的版本）。
-   * 再按一次同一個方案就停止（所以介面上的按鈕是「播放 / 暫停」切換）。即使主畫面暫停，也可以單獨聽。
+   * 試聽（播放／暫停切換）：不看時間軸，直接把目前這首歌用指定的聲音方案循環播放，主畫面暫停時也能單獨聽。
+   * 再按一次同一個方案就停止；按另一個方案則換過去。試聽中如果換了曲風、調性、速度或重新作曲，
+   * 會自動改播新的那首（見 followAudition），不需要先停止再重按。
    */
   async auditionScheme(scheme: SchemeId): Promise<void> {
-    const plan = this.plan;
-    if (!plan || !this.ctx || !this.master) return;
+    if (!this.plan || !this.ctx || !this.master) return;
     if (this.status.audition === scheme) {
       this.stopAudition();
       return;
     }
-    this.stopAudition();
+    await this.runAudition(scheme);
+  }
+
+  /** 渲染並開始播放試聽；如果已經有試聽在播，新的淡入、舊的淡出 */
+  private async runAudition(scheme: SchemeId): Promise<void> {
+    const plan = this.plan;
+    const ctx = this.ctx;
+    if (!plan || !ctx || !this.master) return;
     const tok = ++this.auditionTok;
     this.setStatus({ building: true, error: null, audition: scheme });
     try {
-      const pcm = scheme === plan.scheme && this.currentPcm() ? this.currentPcm()!.pcm : await renderScheme(plan.song, scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true });
-      if (tok !== this.auditionTok) return; // 渲染期間被取消了
-      const b = this.ctx.createBuffer(2, pcm.l.length, SAMPLE_RATE);
+      const pcm = await this.renderFor(plan, scheme).p;
+      if (tok !== this.auditionTok) return; // 渲染期間被取消，或歌又換了
+      const b = ctx.createBuffer(2, pcm.l.length, SAMPLE_RATE);
       b.copyToChannel(pcm.l as Float32Array<ArrayBuffer>, 0);
       b.copyToChannel(pcm.r as Float32Array<ArrayBuffer>, 1);
-      const node = this.ctx.createBufferSource();
+      const node = ctx.createBufferSource();
       node.buffer = b;
-      this.stopBgm();
-      const g = this.ctx.createGain();
-      g.gain.value = this.prefs.bgmVol;
+      node.loop = true;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      g.gain.setTargetAtTime(this.prefs.bgmVol, ctx.currentTime, 0.012);
       node.connect(g).connect(this.master);
       node.start();
       node.onended = () => {
         if (this.audition === node) {
           this.audition = null;
+          this.auditionGain = null;
           this.setStatus({ audition: null });
         }
       };
+      this.fadeOutAudition();
       this.audition = node;
+      this.auditionGain = g;
+      this.stopBgm();
     } catch (e) {
-      if (tok === this.auditionTok) this.setStatus({ error: `試聽失敗：${(e as Error).message}`, audition: null });
+      if (tok === this.auditionTok) {
+        this.fadeOutAudition();
+        this.setStatus({ error: `試聽失敗：${(e as Error).message}`, audition: null });
+      }
     } finally {
       if (tok === this.auditionTok) this.setStatus({ building: false });
+    }
+  }
+
+  /** 試聽中歌換了：稍等一下（拖曳速度滑桿時不要每動一格就重算），再用同一個方案播新的歌 */
+  private followAudition() {
+    const scheme = this.status.audition;
+    if (!scheme) return;
+    this.auditionTok++; // 讓還在渲染的舊歌作廢，舊的聲音繼續播到新的準備好為止
+    this.setStatus({ building: true });
+    if (this.auditionTimer) clearTimeout(this.auditionTimer);
+    this.auditionTimer = setTimeout(() => {
+      this.auditionTimer = null;
+      if (this.status.audition === scheme) void this.runAudition(scheme);
+    }, 200);
+  }
+
+  /** 把目前的試聽聲音淡出並停掉（不會有「啪」一聲） */
+  private fadeOutAudition() {
+    const node = this.audition;
+    const g = this.auditionGain;
+    this.audition = null;
+    this.auditionGain = null;
+    if (!node) return;
+    try {
+      if (this.ctx && g) {
+        g.gain.cancelScheduledValues(this.ctx.currentTime);
+        g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.015);
+        node.stop(this.ctx.currentTime + 0.1);
+      } else node.stop();
+    } catch {
+      /* 已停止 */
     }
   }
   /** 分頁隱藏時停掉聲音，避免背景裡一直響 */
@@ -331,12 +409,11 @@ class AudioEngine {
   }
   stopAudition() {
     this.auditionTok++;
-    try {
-      this.audition?.stop();
-    } catch {
-      /* 已停止 */
+    if (this.auditionTimer) {
+      clearTimeout(this.auditionTimer);
+      this.auditionTimer = null;
     }
-    this.audition = null;
+    this.fadeOutAudition();
     if (this.status.audition) this.setStatus({ audition: null, building: false });
   }
 

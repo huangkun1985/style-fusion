@@ -1,7 +1,7 @@
 {
   "name": "style-fusion",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "動效設計風格混合器：圖像風格 × 動效風格 即時混搭與參考工具",
   "type": "module",
   "scripts": {

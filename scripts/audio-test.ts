@@ -6,8 +6,11 @@ import { GENRES } from '../src/audio/genres';
 import { writeMidi } from '../src/audio/midi';
 import { PACK_INFO, SFX_KINDS, synthSfx } from '../src/audio/sfx';
 import { SCALES } from '../src/audio/theory';
-import type { GenreId, PackId } from '../src/audio/types';
+import { AUDIO_DEFAULT, type GenreId, type PackId } from '../src/audio/types';
 import { buildXm, writeXm } from '../src/audio/xm';
+import { planAudio } from '../src/audio/plan';
+import { MOTION_MAP } from '../src/data/motion';
+import { resolveMove, TUNE_DEFAULT } from '../src/engine/resolve';
 import { PACK_DRUMS, PACK_INSTRUMENTS, PACK_PROGRAM } from '../src/audio/pack/meta';
 import { ensureSamplesFor } from '../src/audio/sampled';
 import { loadDrums, loadInstrument } from '../src/audio/sampler';
@@ -169,6 +172,23 @@ for (const genre of Object.keys(GENRES) as GenreId[]) {
     console.log(`xm ${genre}: ${(b.length / 1024).toFixed(0)} KB, ${mod.instruments.length} 樂器, ${mod.channels} 聲道`);
   }
   console.log(`samples: ${ids.length} instruments, ${zonesN} zones, ${Object.keys(PACK_DRUMS).length} drum hits`);
+}
+// 7) 計畫的識別碼：試聽與背景音樂靠它判斷「要不要重新渲染／換歌」
+{
+  const baseMove = resolveMove([], MOTION_MAP, TUNE_DEFAULT);
+  const base = { v: [{ id: 'flat', w: 1 }], m: [], subject: 'mascot' as const, tune: TUNE_DEFAULT, baseMove, prefs: { ...AUDIO_DEFAULT, genre: 'pop' as GenreId, scheme: 'midi' as const, pack: 'ui' as PackId } };
+  const a = planAudio(base);
+  const withPrefs = (p: Partial<typeof base.prefs>) => planAudio({ ...base, prefs: { ...base.prefs, ...p } });
+  const scheme = withPrefs({ scheme: 'nes' });
+  ok(scheme.songKey === a.songKey && scheme.musicKey !== a.musicKey, 'keys: 換聲音方案＝同一首歌、不同聲音');
+  const pack = withPrefs({ pack: '8bit' });
+  ok(pack.songKey === a.songKey && pack.musicKey === a.musicKey && pack.key !== a.key, 'keys: 換音效包不該重新渲染音樂');
+  for (const [name, p] of [['曲風', { genre: 'jazz' }], ['種子', { seed: 777 }], ['速度', { tempo: 1.3 }], ['調性', { key: 7 }], ['對齊動畫', { sync: false }]] as [string, Partial<typeof base.prefs>][]) {
+    const o = withPrefs(p);
+    ok(o.songKey !== a.songKey, `keys: 換${name}應該是另一首歌`);
+  }
+  ok(planAudio(base).songKey === a.songKey, 'keys: 同樣的設定要得到同樣的識別碼');
+  console.log('plan keys ok');
 }
 console.log(fails ? `FAILED ${fails}` : 'ALL OK');
 process.exit(fails ? 1 : 0);
