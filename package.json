@@ -1,0 +1,40 @@
+{
+  "name": "style-fusion",
+  "private": true,
+  "version": "1.1.1",
+  "description": "動效設計風格混合器：圖像風格 × 動效風格 即時混搭與參考工具",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test:audio": "tsx scripts/audio-test.ts",
+    "samples:build": "node scripts/samples/build.mjs",
+    "audio:sweep": "tsx scripts/audio-sweep.ts"
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "gifenc": "^1.0.3",
+    "lucide-react": "^1.49.0",
+    "mp4-muxer": "^5.2.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tonejs/midi": "^2.0.28",
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.2",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
