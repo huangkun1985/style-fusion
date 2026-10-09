@@ -1,6 +1,8 @@
 // 播放引擎：Web Audio。BGM 先渲染成 AudioBuffer 再循環播放，並跟著動畫時間軸對齊；
 // 音效在動畫經過提示點時觸發。時間軸拖曳、暫停、慢放都會即時跟上。
 import type { Look, Move, SubjectId, Tune } from '../engine/types';
+import { subjectVersion } from '../engine/subjects';
+import { themes } from '../engine/themes';
 import { CueTracker } from './cues';
 import type { Stereo } from './dsp';
 import { mixdown } from './mixdown';
@@ -33,6 +35,12 @@ export interface ScenePatch {
 
 class AudioEngine {
   private ctx: AudioContext | null = null;
+  /** 從排程到喇叭真正出聲的延遲（秒）：畫面要跟聲音對拍時用（音樂視覺化） */
+  latency(): number {
+    const c = this.ctx as (AudioContext & { outputLatency?: number }) | null;
+    if (!c || c.state !== 'running') return 0;
+    return (c.outputLatency || 0) + (c.baseLatency || 0);
+  }
   private master: GainNode | null = null;
   private bgmGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
@@ -60,6 +68,8 @@ class AudioEngine {
   private waiting: Array<() => void> = [];
   status: EngineStatus = { building: false, ready: false, error: null, renderMs: 0, ctxState: 'none', scheme: null, audition: null };
   private auditionTok = 0;
+  /** 下一次換歌時，讓試聽改用新計畫的聲音方案（靈感骰子用） */
+  snapAudition = false;
 
   // ---------- 訂閱 ----------
   subscribe = (fn: () => void) => {
@@ -121,14 +131,20 @@ class AudioEngine {
     this.scene = s;
     this.prefs = s.prefs;
     this.plan = s.plan;
-    const tk = [s.subject, s.move, s.tune, s.look, s.aspect];
+    // 自訂主題的音效點來自主題檔：匯入、切換、刪除主題後要重新建立（themes.rev 每次變動都會加一）
+    const tk = [s.subject, s.move, s.tune, s.look, s.aspect, themes.rev(), subjectVersion()];
     if (!this.tracker || tk.some((x, i) => x !== this.trackerKey[i])) {
       this.tracker = new CueTracker(s.subject, s.move, s.tune, s.look, s.aspect);
       this.trackerKey = tk;
     }
     this.applyGains();
     // 試聽中換了曲風、調性、速度、種子…：試聽跟著換成新的歌，不必先停止再重按
-    if (prevPlan && prevPlan.songKey !== s.plan.songKey && this.status.audition) this.followAudition();
+    if (prevPlan && prevPlan.songKey !== s.plan.songKey && this.status.audition) {
+      // 靈感骰子：試聽的方案跟著新抽到的聲音方案走，不然會一直停在按下試聽的那個方案（例如永遠是 8-bit）
+      if (this.snapAudition) this.setStatus({ audition: s.plan.scheme });
+      this.followAudition();
+    }
+    this.snapAudition = false;
     // 主開關從開變關：連試聽一起停
     if (wasOn && !s.prefs.on && this.status.audition) this.stopAudition();
     const wantBgm = s.prefs.on && s.prefs.bgm;
@@ -436,3 +452,8 @@ class AudioEngine {
 }
 
 export const audioEngine = new AudioEngine();
+
+/** 靈感骰子抽完音樂後呼叫：正在試聽的話，試聽改播新抽到的方案 */
+export function snapAuditionToPlan() {
+  if (audioEngine.status.audition) audioEngine.snapAudition = true;
+}

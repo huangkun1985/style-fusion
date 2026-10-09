@@ -6,7 +6,7 @@
 //  - 緩動曲線：函數級加權混合
 import { FX, fxActive } from './fx';
 import { blendEase, type EaseId } from './easing';
-import { blendMany, mix } from './color';
+import { blendMany, lighten, mix, rgb } from './color';
 import type { FxInst, FxSpec, LType, Look, LookPatch, Move, MoveNums, MovePatch, Palette, PType, Tune } from './types';
 import type { MotionStyle, Sel, VisualStyle } from '../data/schema';
 
@@ -45,6 +45,7 @@ export const LOOK_DEFAULT: Look = {
   shadowColor: '',
   glow: 0,
   sticker: 0,
+  cutout: 0,
   font: 'sans',
   upper: false,
   deco: [],
@@ -122,6 +123,7 @@ export const TUNE_DEFAULT: Tune = {
   fxMul: 1,
   loopMul: 1,
   custom: {},
+  keepColors: true,
 };
 
 interface Item<P> {
@@ -157,7 +159,33 @@ function cat<P, T>(items: Item<P>[], get: (p: P) => T | undefined, def: T): T {
   return best === undefined ? def : best;
 }
 
-export function resolveLook(sel: Sel[], lib: Record<string, VisualStyle>, tune: Tune = TUNE_DEFAULT): Look {
+/** 量化類後期（8-bit、16-bit、積木…）把畫面對應到固定調色板，會把使用者的顏色換掉；
+ *  這裡把使用者的顏色（含明暗）加進調色板，並拿掉原調色板裡最接近的顏色，總數不超過 16 */
+function withMine(list: string[], mine: Partial<Palette>): string[] {
+  const own = [...new Set(Object.values(mine).filter((c): c is string => !!c && c.startsWith('#')))].slice(0, 5);
+  if (!list.length || !own.length) return list.slice();
+  const shades = list.length >= 12 ? [-0.16, 0, 0.14, 0.28] : [0];
+  const extra: string[] = [];
+  for (const c of own) for (const k of shades) extra.push(k === 0 ? c : lighten(c, k));
+  const out = list.map((c) => ({ c, mine: false }));
+  const dist = (a: string, b: string) => {
+    const x = rgb(a);
+    const y = rgb(b);
+    return (x[0] - y[0]) ** 2 + (x[1] - y[1]) ** 2 + (x[2] - y[2]) ** 2;
+  };
+  for (const e of extra) {
+    if (out.length < 16) out.push({ c: e, mine: true });
+    else {
+      let bi = -1;
+      for (let i = 0; i < out.length; i++) if (!out[i].mine && (bi < 0 || dist(out[i].c, e) < dist(out[bi].c, e))) bi = i;
+      if (bi >= 0) out[bi] = { c: e, mine: true };
+    }
+  }
+  return out.map((x) => x.c);
+}
+
+/** base：主體自帶的色板（自訂主題的 palette），蓋過風格的色板，但仍可被使用者的自訂色板蓋過 */
+export function resolveLook(sel: Sel[], lib: Record<string, VisualStyle>, tune: Tune = TUNE_DEFAULT, base?: Partial<Palette>): Look {
   const items: Item<LookPatch>[] = [];
   sel.forEach((s, i) => {
     const st = lib[s.id];
@@ -190,7 +218,9 @@ export function resolveLook(sel: Sel[], lib: Record<string, VisualStyle>, tune: 
       }
     }
   }
-  pal = { ...pal, ...tune.custom };
+  // 優先使用我的顏色：主題自帶的色板與自訂色板蓋過風格的色板；關閉時完全以風格為準
+  const mine: Partial<Palette> = tune.keepColors === false ? {} : { ...base, ...tune.custom };
+  pal = { ...pal, ...mine };
 
   // ----- 後期鏈 -----
   const groups = new Map<string, { w: number; i: number; spec: FxSpec }[]>();
@@ -217,8 +247,8 @@ export function resolveLook(sel: Sel[], lib: Record<string, VisualStyle>, tune: 
     if (fx === 'pixelate') p.size *= tune.fxMul;
     const dom = [...g].sort((a, b) => score(b) - score(a));
     const c = dom.find((x) => x.spec.c)?.spec.c ?? [];
-    const palList = dom.find((x) => x.spec.pal)?.spec.pal ?? [];
-    if (fxActive(def, p)) post.push({ fx, p, c: c.slice(), pal: palList.slice() });
+    const palList = withMine(dom.find((x) => x.spec.pal)?.spec.pal ?? [], mine);
+    if (fxActive(def, p)) post.push({ fx, p, c: c.slice(), pal: palList });
   }
   post.sort((a, b) => FX[a.fx].order - FX[b.fx].order);
 
@@ -248,6 +278,7 @@ export function resolveLook(sel: Sel[], lib: Record<string, VisualStyle>, tune: 
     shadowColor: cat(items, (p) => p.shadowColor, D.shadowColor),
     glow: num(items, (p) => p.glow, D.glow),
     sticker: num(items, (p) => p.sticker, D.sticker),
+    cutout: num(items, (p) => p.cutout, D.cutout),
     font: cat(items, (p) => p.font, D.font),
     upper: cat(items, (p) => p.upper, D.upper),
     deco: [...decoMap].map(([id, a]) => ({ id, a })),

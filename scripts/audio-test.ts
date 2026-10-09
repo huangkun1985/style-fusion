@@ -8,7 +8,9 @@ import { PACK_INFO, SFX_KINDS, synthSfx } from '../src/audio/sfx';
 import { SCALES } from '../src/audio/theory';
 import { AUDIO_DEFAULT, type GenreId, type PackId } from '../src/audio/types';
 import { buildXm, writeXm } from '../src/audio/xm';
-import { planAudio } from '../src/audio/plan';
+import { planAudio, sanitizeAudioPrefs } from '../src/audio/plan';
+import { PIECES, PIECE_BY_ID, parsePiece } from '../src/audio/classics';
+import { cleanMusic, decodeMix, encodeMix, musicOf } from '../src/store/share';
 import { MOTION_MAP } from '../src/data/motion';
 import { resolveMove, TUNE_DEFAULT } from '../src/engine/resolve';
 import { PACK_DRUMS, PACK_INSTRUMENTS, PACK_PROGRAM } from '../src/audio/pack/meta';
@@ -95,9 +97,9 @@ for (const genre of Object.keys(GENRES) as GenreId[]) {
   ok(id === 'Extended Module: ', `${genre}: xm id`);
   ok(dv.getUint16(58, true) === 0x0104, `${genre}: xm version`);
   ok(dv.getUint16(68, true) === mod.channels, `${genre}: xm channels`);
-  ok(mod.channels <= 16, `${genre}: channels ${mod.channels} > 16`);
+  ok(mod.channels <= 32, `${genre}: channels ${mod.channels} > 32`);
   ok(mod.rows <= 256, `${genre}: rows`);
-  ok(mod.instruments.length >= 3 && mod.instruments.length <= 40, `${genre}: instruments ${mod.instruments.length}`);
+  ok(mod.instruments.length >= 1 && mod.instruments.length <= 40, `${genre}: instruments ${mod.instruments.length}`);
 }
 // 5) 音效：每個音效包 × 每種音效
 {
@@ -189,6 +191,49 @@ for (const genre of Object.keys(GENRES) as GenreId[]) {
   }
   ok(planAudio(base).songKey === a.songKey, 'keys: 同樣的設定要得到同樣的識別碼');
   console.log('plan keys ok');
+
+  // 名曲：換曲目＝另一首歌；曲風選自動時用該曲建議的編曲；壞掉的 id 退回自動作曲
+  const ode = withPrefs({ piece: 'ode', genre: 'auto' });
+  ok(ode.songKey !== a.songKey, 'keys: 選名曲應該是另一首歌');
+  ok(ode.genre === PIECE_BY_ID.ode.genre && ode.song.title.startsWith('歡樂頌'), `名曲自動編曲 ${ode.genre} / ${ode.song.title}`);
+  ok(withPrefs({ piece: 'canon', genre: 'auto' }).songKey !== ode.songKey, 'keys: 換名曲要換識別碼');
+  ok(withPrefs({ piece: 'ode', genre: 'jazz' }).songKey !== ode.songKey, 'keys: 名曲換編曲風格要換識別碼');
+  ok(sanitizeAudioPrefs({ piece: 'no-such-piece' }).piece === 'off', 'sanitize: 不存在的名曲 id 要退回 off');
+  ok(sanitizeAudioPrefs({ piece: 42 as never }).piece === 'off', 'sanitize: 非字串的名曲要退回 off');
+  console.log('piece plan ok');
+}
+
+// 8) 名曲庫：記譜檢查與所有曲風都能編曲（完整版：npx tsx scripts/classics-check.ts）
+for (const p of PIECES) {
+  const pp = parsePiece(p);
+  ok(pp.bars * pp.spb <= 256, `${p.id}: 超過 XM 的 256 列`);
+  for (const genre of ['classical', 'pop', 'jazz', 'rock', 'chipAdventure', 'cinematic'] as GenreId[]) {
+    const s = composeSong({ genre, seed: 11, animSeconds: 3.82, sync: true, tempo: 1, key: -1, piece: p.id });
+    ok(Math.abs(s.seconds - s.animLoops * 3.82) < 1e-6, `${p.id}/${genre}: 循環長度`);
+    for (const tr of s.tracks) for (const n of tr.notes) ok(n.t >= 0 && n.t < s.steps && n.dur > 0 && n.vel > 0 && n.vel <= 1, `${p.id}/${genre}/${tr.id}: 音符 t=${n.t} dur=${n.dur}`);
+    const mod = buildXm(s);
+    ok(mod.rows <= 256 && mod.channels <= 32, `${p.id}/${genre}: xm rows=${mod.rows} ch=${mod.channels}`);
+  }
+  const mid = new Midi(writeMidi(composeSong({ genre: p.genre, seed: 11, animSeconds: 3.82, sync: true, tempo: 1, key: -1, piece: p.id })));
+  ok(mid.tracks.length >= 3, `${p.id}: midi tracks`);
+}
+console.log(`classics ok (${PIECES.length} 首)`);
+
+// 9) 配方碼與收藏帶著音樂：往返不變、舊格式（沒有音樂）仍能讀、壞資料會被整理
+{
+  const music = { ...musicOf(AUDIO_DEFAULT), genre: 'quartet' as GenreId, scheme: 'xm' as const, piece: 'canon', seed: 4321, tempo: 1.15, key: 7, sync: false, pack: 'natural' as PackId };
+  const code = encodeMix({ v: [{ id: 'flat', w: 1 }], m: [], s: 'ui', a: music });
+  const back = decodeMix(code);
+  ok(!!back && JSON.stringify(back.a) === JSON.stringify(music), `配方碼往返：${JSON.stringify(back?.a)} vs ${JSON.stringify(music)}`);
+  ok(back?.s === 'ui', '配方碼往返：主體');
+  const legacy = 'SF1.' + Buffer.from(JSON.stringify({ v: 'flat:100', m: '', s: 'mascot' })).toString('base64url');
+  const old = decodeMix(legacy);
+  ok(!!old && old.a === undefined, '舊格式配方碼（沒有音樂）要能讀，且 a 是 undefined');
+  const bad = 'SF1.' + Buffer.from(JSON.stringify({ v: 'flat:100', m: '', s: 'mascot', a: ['nope', 'zzz', 'x', 1, 'abc', 99, 77, 'ghost'] })).toString('base64url');
+  const cleaned = decodeMix(bad)?.a;
+  ok(!!cleaned && cleaned.genre === 'auto' && cleaned.scheme === 'auto' && cleaned.piece === 'off' && cleaned.key === 11 && cleaned.tempo === 2, `壞的音樂設定要整理成合法值：${JSON.stringify(cleaned)}`);
+  ok(cleanMusic(null).piece === 'off', 'cleanMusic(null)');
+  console.log(`share code ok (${code.length} 字元)`);
 }
 console.log(fails ? `FAILED ${fails}` : 'ALL OK');
 process.exit(fails ? 1 : 0);

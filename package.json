@@ -1,7 +1,7 @@
 {
   "name": "style-fusion",
   "private": true,
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "動效設計風格混合器：圖像風格 × 動效風格 即時混搭與參考工具",
   "type": "module",
   "scripts": {
@@ -9,11 +9,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:audio": "tsx scripts/audio-test.ts",
+    "test:audio": "tsx scripts/audio-test.ts && tsx scripts/midi-import-test.ts && tsx scripts/theme-test.ts",
     "samples:build": "node scripts/samples/build.mjs",
     "audio:sweep": "tsx scripts/audio-sweep.ts"
   },
   "dependencies": {
+    "@tonejs/midi": "^2.0.28",
     "fflate": "^0.8.3",
     "gifenc": "^1.0.3",
     "lucide-react": "^1.49.0",
@@ -25,7 +26,6 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@tonejs/midi": "^2.0.28",
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

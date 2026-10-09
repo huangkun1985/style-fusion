@@ -183,6 +183,27 @@ const FRONT: Record<string, (d: D) => void> = {
       ctx.stroke();
     }
   },
+  // 紙膠帶：貼在畫面四角的半透明斜條
+  tape: ({ ctx, look, a, hw, hh }) => {
+    const strip = (x: number, y: number, ang: number, c: string, k: number) => {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(ang);
+      ctx.shadowColor = 'rgba(30,20,10,0.18)';
+      ctx.shadowBlur = 3;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = rgba(c, 0.62 * a);
+      ctx.fillRect(-56, -13, 112, 26);
+      ctx.shadowColor = 'transparent';
+      ctx.fillStyle = rgba('#FFFFFF', 0.22 * a);
+      for (let i = -48; i < 48; i += 16) ctx.fillRect(i + k, -13, 7, 26);
+      ctx.restore();
+    };
+    strip(-hw + 30, -hh + 30, -Math.PI / 4, look.pal.a, 0);
+    strip(hw - 30, -hh + 30, Math.PI / 4, look.pal.s, 8);
+    strip(-hw + 30, hh - 30, Math.PI / 4, look.pal.p, 4);
+    strip(hw - 30, hh - 30, -Math.PI / 4, look.pal.q, 12);
+  },
   polaroid: ({ ctx, look, a, hw, hh }) => {
     ctx.fillStyle = rgba('#F7F5EE', a);
     const m = Math.min(hw, hh) * 0.08;

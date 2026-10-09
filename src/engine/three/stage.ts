@@ -11,6 +11,12 @@ import { buildCharacter } from './scenes/character';
 import { buildIsland } from './scenes/island';
 import { buildShapes } from './scenes/shapes';
 import { buildTerrain } from './scenes/terrain';
+import { buildCharacter2 } from './scenes/v2/character';
+import { buildIsland2 } from './scenes/v2/island';
+import { buildShapes2 } from './scenes/v2/shapes';
+import { buildTerrain2 } from './scenes/v2/terrain';
+import { buildText2 } from './scenes/v2/text';
+import { buildProduct } from './scenes/v2/product';
 import { buildText } from './scenes/text';
 import type { BuildCtx, CamOverride, Scene3DId, SceneInst } from './types';
 
@@ -28,6 +34,12 @@ const BUILDERS: Record<Scene3DId, (c: BuildCtx) => SceneInst> = {
   text: buildText,
   character: buildCharacter,
   terrain: buildTerrain,
+  island2: buildIsland2,
+  shapes2: buildShapes2,
+  text2: buildText2,
+  character2: buildCharacter2,
+  terrain2: buildTerrain2,
+  product: buildProduct,
 };
 
 const MAX_CACHE = 26;
@@ -50,7 +62,7 @@ export class Stage3D implements ThreeLike {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.lost = true;

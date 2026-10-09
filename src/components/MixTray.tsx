@@ -14,22 +14,35 @@ export function MixTray() {
   const randomize = useStore((s) => s.randomize);
   const clear = useStore((s) => s.clear);
   const set = useStore((s) => s.set);
+  const musicLocked = useStore((s) => s.locked.includes('a:music'));
+  const subjectLocked = useStore((s) => s.locked.includes('s:subject'));
+  const toggleLock = useStore((s) => s.toggleLock);
   const h = harmony(v, m);
   return (
     <section aria-label="目前混合" className="rounded-xl border border-line bg-panel p-2.5">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="font-display text-[15px] font-bold tracking-tight">混合配方</h2>
-          <Harmony score={h.score} label={h.label} tone={h.tone} />
+      {/* 標題列永遠只有一行：按鈕組固定在右邊、不換行，靈感骰子的位置才不會跳；空間不夠時是左邊的搭配度被壓縮，窄螢幕則縮短按鈕文字 */}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="shrink-0 font-display text-[15px] font-bold tracking-tight">混合配方</h2>
+          <div className="hidden min-w-0 overflow-hidden whitespace-nowrap sm:block">
+            <Harmony score={h.score} label={h.label} tone={h.tone} />
+          </div>
         </div>
-        <div className="flex gap-1">
+        <div className="flex shrink-0 whitespace-nowrap gap-1">
           <Button size="xs" variant="ghost" onClick={() => set({ starterOpen: true })} title="從不同主題的完整案例重新開始">
-            換個起點
+            <span className="sm:hidden">起點</span>
+            <span className="hidden sm:inline">換個起點</span>
           </Button>
           <Button size="xs" variant="ghost" onClick={() => clear()}>
             清空
           </Button>
-          <Button size="xs" variant="outline" onClick={randomize} title="隨機抽一組風格（鎖定的會保留）· 快捷鍵 R">
+          <Button size="xs" variant="ghost" onClick={() => toggleLock('s', 'subject')} title={subjectLocked ? '主體已鎖定：靈感骰子不會換主體（點一下解除）' : '鎖定主體（角色跳躍、UI、文字…）：靈感骰子不換主體'} aria-pressed={subjectLocked}>
+            {subjectLocked ? <Lock size={13} /> : <LockOpen size={13} />} <span className="hidden sm:inline">主體</span>
+          </Button>
+          <Button size="xs" variant="ghost" onClick={() => toggleLock('a', 'music')} title={musicLocked ? '音樂已鎖定：靈感骰子只換風格，不換音樂（點一下解除）' : '鎖定音樂：靈感骰子只換風格，不換音樂'} aria-pressed={musicLocked}>
+            {musicLocked ? <Lock size={13} /> : <LockOpen size={13} />} <span className="hidden sm:inline">音樂</span>
+          </Button>
+          <Button size="xs" variant="outline" onClick={randomize} title="全部隨機抽卡：風格、動效、主體（UI、跳躍、文字…）、微調參數與音樂；鎖定的會保留 · 快捷鍵 R">
             <Dices size={14} /> 靈感骰子
           </Button>
         </div>

@@ -1,0 +1,276 @@
+{
+  "format": "style-fusion-theme",
+  "version": 1,
+  "name": "戲水黃色小鴨",
+  "desc": "原創幾何小鴨在水面上划水悠游、上下沉浮、拍打小翅膀與泛起波紋漣漪。",
+  "loop": 3.0,
+  "hero": 0.3,
+  "key": 0.5,
+  "ground": 75,
+  "shadowFor": "duck",
+  "shadowSize": 60,
+  "track": "duck",
+  "events": [
+    {
+      "u": 0.25,
+      "x": 28,
+      "y": 70,
+      "k": 0.6,
+      "sfx": "step"
+    },
+    {
+      "u": 0.75,
+      "x": -28,
+      "y": 70,
+      "k": 0.6,
+      "sfx": "step"
+    }
+  ],
+  "sounds": [
+    {
+      "u": 0.05,
+      "sfx": "whoosh",
+      "k": 0.5
+    },
+    {
+      "u": 0.52,
+      "sfx": "whoosh",
+      "k": 0.5
+    },
+    {
+      "u": 0.82,
+      "sfx": "blip",
+      "k": 0.4
+    }
+  ],
+  "layers": [
+    {
+      "id": "rippleBack",
+      "type": "ellipse",
+      "rx": 58,
+      "ry": 14,
+      "y": 72,
+      "fill": null,
+      "stroke": "s",
+      "lw": 1.2,
+      "s": [
+        [0, 0.75, "inOut"],
+        [0.5, 1.2, "inOut"],
+        [1, 0.75]
+      ],
+      "alpha": [
+        [0, 0.5, "inOut"],
+        [0.5, 0.15, "inOut"],
+        [1, 0.5]
+      ]
+    },
+    {
+      "id": "duck",
+      "type": "group",
+      "x": [
+        [0, -18, "inOut"],
+        [0.5, 18, "inOut"],
+        [1, -18]
+      ],
+      "y": [
+        [0, 24, "inOut"],
+        [0.25, 34, "inOut"],
+        [0.5, 22, "inOut"],
+        [0.75, 34, "inOut"],
+        [1, 24]
+      ],
+      "rot": [
+        [0, -4, "inOut"],
+        [0.5, 4, "inOut"],
+        [1, -4]
+      ],
+      "react": 1.2,
+      "children": [
+        {
+          "id": "tail",
+          "type": "polygon",
+          "points": [-55, 12, -82, -8, -50, -4],
+          "fill": "p",
+          "delay": 0.08,
+          "rot": [
+            [0, -6, "inOut"],
+            [0.5, 10, "inOut"],
+            [1, -6]
+          ]
+        },
+        {
+          "id": "body",
+          "type": "ellipse",
+          "rx": 52,
+          "ry": 36,
+          "x": -10,
+          "y": 14,
+          "fill": "p",
+          "sy": [
+            [0, 1.0, "inOut"],
+            [0.25, 0.94, "inOut"],
+            [0.5, 1.04, "inOut"],
+            [0.75, 0.94, "inOut"],
+            [1, 1.0]
+          ],
+          "sx": [
+            [0, 1.0, "inOut"],
+            [0.25, 1.05, "inOut"],
+            [0.5, 0.98, "inOut"],
+            [0.75, 1.05, "inOut"],
+            [1, 1.0]
+          ]
+        },
+        {
+          "id": "wing",
+          "type": "ellipse",
+          "rx": 28,
+          "ry": 18,
+          "x": -12,
+          "y": 16,
+          "fill": "card",
+          "rot": [
+            [0, -8, "inOut"],
+            [0.25, -24, "out"],
+            [0.45, 6, "inOut"],
+            [0.75, -24, "out"],
+            [0.9, 2, "inOut"],
+            [1, -8]
+          ]
+        },
+        {
+          "id": "headGroup",
+          "type": "group",
+          "x": 30,
+          "y": -22,
+          "delay": 0.05,
+          "rot": [
+            [0, 2, "inOut"],
+            [0.5, -4, "inOut"],
+            [1, 2]
+          ],
+          "children": [
+            {
+              "id": "neck",
+              "type": "ellipse",
+              "rx": 18,
+              "ry": 22,
+              "x": -6,
+              "y": 14,
+              "fill": "p"
+            },
+            {
+              "id": "head",
+              "type": "circle",
+              "r": 28,
+              "x": 0,
+              "y": 0,
+              "fill": "p"
+            },
+            {
+              "id": "crest",
+              "type": "polygon",
+              "points": [-6, -26, 2, -42, 8, -26],
+              "fill": "p",
+              "delay": 0.08,
+              "rot": [
+                [0, -10, "inOut"],
+                [0.5, 12, "inOut"],
+                [1, -10]
+              ]
+            },
+            {
+              "id": "cheek",
+              "type": "circle",
+              "r": 7,
+              "x": 6,
+              "y": 8,
+              "fill": "r",
+              "opacity": 0.6
+            },
+            {
+              "id": "eye",
+              "type": "circle",
+              "r": 5,
+              "x": 10,
+              "y": -4,
+              "fill": "ink",
+              "sy": [
+                [0, 1, "hold"],
+                [0.8, 1, "out"],
+                [0.83, 0.15, "out"],
+                [0.86, 1, "hold"],
+                [1, 1]
+              ]
+            },
+            {
+              "id": "eyeGlint",
+              "type": "circle",
+              "r": 1.8,
+              "x": 11.5,
+              "y": -5.5,
+              "fill": "light",
+              "sy": [
+                [0, 1, "hold"],
+                [0.8, 1, "out"],
+                [0.83, 0.15, "out"],
+                [0.86, 1, "hold"],
+                [1, 1]
+              ]
+            },
+            {
+              "id": "beakUpper",
+              "type": "polygon",
+              "points": [24, -3, 48, 5, 24, 9],
+              "fill": "a"
+            },
+            {
+              "id": "beakLower",
+              "type": "polygon",
+              "points": [24, 7, 42, 11, 24, 13],
+              "fill": "q"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "waterWaveFront",
+      "type": "curve",
+      "points": [-150, 72, -90, 76, -30, 68, 30, 75, 90, 69, 150, 73],
+      "fill": null,
+      "stroke": "s",
+      "w": 3.5,
+      "x": [
+        [0, 0, "linear"],
+        [1, 60]
+      ]
+    },
+    {
+      "id": "splashBubble",
+      "type": "circle",
+      "r": 4,
+      "fill": "light",
+      "x": [
+        [0, 42, "linear"],
+        [0.45, 52, "linear"],
+        [0.55, -45, "linear"],
+        [1, -35]
+      ],
+      "y": [
+        [0, 62, "inOut"],
+        [0.25, 48, "inOut"],
+        [0.5, 66, "hold"],
+        [0.75, 50, "inOut"],
+        [1, 62]
+      ],
+      "alpha": [
+        [0, 0.8, "inOut"],
+        [0.45, 0, "hold"],
+        [0.55, 0.8, "inOut"],
+        [0.95, 0, "hold"],
+        [1, 0.8]
+      ]
+    }
+  ]
+}

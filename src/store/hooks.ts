@@ -3,6 +3,7 @@ import { planAudio } from '../audio/plan';
 import { MOTION_MAP } from '../data/motion';
 import type { Sel } from '../data/schema';
 import { VISUAL_MAP } from '../data/visual';
+import { currentThemePalette } from '../engine/themes';
 import { resolveLook, resolveMove, TUNE_DEFAULT } from '../engine/resolve';
 import type { ThumbSpec } from '../engine/thumbs';
 import type { SubjectId, Tune } from '../engine/types';
@@ -15,14 +16,18 @@ export function useAudioPlan() {
   const tune = useStore((s) => s.tune);
   const subject = useStore((s) => s.subject);
   const prefs = useStore((s) => s.audio);
+  const midiRev = useStore((s) => s.midiRev);
+  const themeRev = useStore((s) => s.themeRev);
   const baseMove = useMemo(() => resolveMove(m, MOTION_MAP, tune), [m, tune]);
-  const plan = useMemo(() => planAudio({ v, m, subject, tune, prefs, baseMove }), [v, m, subject, tune, prefs, baseMove]);
+  const plan = useMemo(() => planAudio({ v, m, subject, tune, prefs, baseMove }), [v, m, subject, tune, prefs, baseMove, midiRev, themeRev]);
   return { plan, baseMove, prefs, subject, v, m, tune };
 }
 
 export function useLookMove() {
   const { plan, baseMove, prefs, v, m, tune } = useAudioPlan();
-  const look = useMemo(() => resolveLook(v, VISUAL_MAP, tune), [v, tune]);
+  const subject = useStore((s) => s.subject);
+  const themeRev = useStore((s) => s.themeRev);
+  const look = useMemo(() => resolveLook(v, VISUAL_MAP, tune, subject === 'custom' ? currentThemePalette() : undefined), [v, tune, subject, themeRev]);
   // 節拍連動：音樂與動畫的整數拍對齊時，視覺的節拍脈動改用音樂的 BPM
   const move = useMemo(
     () => (prefs.on && prefs.bgm && plan.song.beatLocked && baseMove.beat + baseMove.zoomPunch > 0.05 ? { ...baseMove, bpm: plan.song.bpm } : baseMove),
@@ -61,10 +66,11 @@ export function styleSpec(kind: 'v' | 'm', id: string, mode: ThumbMode, cur: { v
 
 const mixCache = new Map<string, ThumbSpec>();
 export function mixSpec(v: Sel[], m: Sel[], subject: SubjectId, tune: Tune = TUNE_DEFAULT): ThumbSpec {
-  const key = `${sig(v)}|${sig(m)}|${subject}|${JSON.stringify(tune)}`;
+  const base = subject === 'custom' ? currentThemePalette() : undefined;
+  const key = `${sig(v)}|${sig(m)}|${subject}|${JSON.stringify(tune)}|${JSON.stringify(base ?? '')}`;
   let s = mixCache.get(key);
   if (!s) {
-    s = { subject, look: resolveLook(v, VISUAL_MAP, tune), move: resolveMove(m, MOTION_MAP, tune), tune };
+    s = { subject, look: resolveLook(v, VISUAL_MAP, tune, base), move: resolveMove(m, MOTION_MAP, tune), tune };
     if (mixCache.size > 300) mixCache.clear();
     mixCache.set(key, s);
   }

@@ -1,0 +1,129 @@
+{
+  "format": "style-fusion-theme",
+  "version": 1,
+  "name": "小行星系統（範本）",
+  "desc": "範本：恆星脈動、行星繞行、月亮繞著行星。示範巢狀旋轉（群組）、無填色的圓環、文字圖層與「誇張」連動。",
+  "loop": 6,
+  "hero": 0.1,
+  "key": 0.2,
+  "track": "planet",
+  "sounds": [
+    {
+      "u": 0,
+      "sfx": "whoosh",
+      "k": 0.5
+    },
+    {
+      "u": 0.5,
+      "sfx": "ping",
+      "k": 0.4
+    }
+  ],
+  "layers": [
+    {
+      "id": "ring",
+      "type": "ellipse",
+      "rx": 130,
+      "ry": 130,
+      "fill": null,
+      "stroke": "ink",
+      "lw": 0.6,
+      "opacity": 0.35
+    },
+    {
+      "id": "star",
+      "type": "circle",
+      "r": 34,
+      "fill": "a",
+      "s": [
+        [
+          0,
+          1,
+          "inOut"
+        ],
+        [
+          0.5,
+          1.1,
+          "inOut"
+        ],
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "id": "arm1",
+      "type": "group",
+      "rot": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          360
+        ]
+      ],
+      "children": [
+        {
+          "id": "planet",
+          "type": "circle",
+          "r": 16,
+          "fill": "p",
+          "x": 130,
+          "children": [
+            {
+              "id": "arm2",
+              "type": "group",
+              "rot": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  1,
+                  1080
+                ]
+              ],
+              "children": [
+                {
+                  "id": "moon",
+                  "type": "circle",
+                  "r": 6,
+                  "fill": "light",
+                  "x": 30
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "label",
+      "type": "text",
+      "text": "HELLO",
+      "size": 34,
+      "fill": "ink",
+      "font": "display",
+      "react": 1,
+      "y": [
+        [
+          0,
+          -150,
+          "inOut"
+        ],
+        [
+          0.5,
+          -140,
+          "inOut"
+        ],
+        [
+          1,
+          -150
+        ]
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 // StyleBrush：所有主體都透過它繪圖，因此「圖像風格」會自動套用到每個形狀上：
 // 幾何（多邊形面數、圓角、沸騰、果凍、網格吸附）→ 陰影 → 填色模式 → 描邊樣式 → 發光。
-import { darken, hueRotate, lighten, rgba } from './color';
+import { darken, hueRotate, lighten, readableOn, rgba } from './color';
 import { fontCss } from './fonts';
 import type { MotionCtx } from './motion';
 import type { FillMode, FontId, Look, Palette, Role } from './types';
@@ -145,6 +145,10 @@ export class Brush {
   scale(sx: number, sy = sx) {
     this.m = mul(this.m, [sx, 0, 0, sy, 0, 0]);
   }
+  /** 水平斜切（x' = x + kx·y）；負值＝向右傾的斜體（y 向下） */
+  skew(kx: number) {
+    if (kx) this.m = mul(this.m, [1, 0, kx, 1, 0, 0]);
+  }
   /** 沿 ang 方向以 (px,py) 為支點擠壓拉伸，保持面積 */
   stretch(px: number, py: number, s: number, ang = -Math.PI / 2) {
     if (Math.abs(s) < 0.001) return;
@@ -169,8 +173,13 @@ export class Brush {
   // ---------- 顏色 ----------
   col(p: Paint): string {
     if (!p) return 'rgba(0,0,0,0)';
-    const v = (this.pal as unknown as Record<string, string>)[p];
-    return v ?? p;
+    const pal = this.pal as unknown as Record<string, string>;
+    const v = pal[p];
+    if (v) return v;
+    // 角色加明暗：a+20（亮 20%）、a-15（暗 15%）
+    const sh = /^([a-z0-9]+)([+-])(\d{1,2})$/.exec(p);
+    if (sh && pal[sh[1]]) return sh[2] === '+' ? lighten(pal[sh[1]], +sh[3] / 100) : darken(pal[sh[1]], +sh[3] / 100);
+    return p;
   }
 
   // ---------- 點生成 ----------
@@ -823,6 +832,70 @@ export class Brush {
         ctx.restore();
         break;
       }
+      case 'paper': {
+        ctx.fillStyle = color;
+        ctx.fill(path);
+        if (bb.r > 10 && o.hl !== false) {
+          ctx.save();
+          ctx.clip(path);
+          // 斜向的光：左上微亮、右下微暗，像紙張微微捲曲
+          const g = ctx.createLinearGradient(bb.x, bb.y, bb.x + bb.w, bb.y + bb.h);
+          g.addColorStop(0, 'rgba(255,255,255,0.2)');
+          g.addColorStop(0.55, 'rgba(255,255,255,0)');
+          g.addColorStop(1, 'rgba(0,0,0,0.1)');
+          ctx.fillStyle = g;
+          ctx.fillRect(bb.x, bb.y, bb.w, bb.h);
+          // 紙纖維
+          ctx.strokeStyle = rgba(darken(color, 0.3), 0.17);
+          ctx.lineWidth = 0.7;
+          ctx.beginPath();
+          const n = Math.min(30, Math.round((bb.w * bb.h) / 800));
+          for (let i = 0; i < n; i++) {
+            const fx = bb.x + hash(i, this.sid, 11) * bb.w;
+            const fy = bb.y + hash(i, this.sid, 12) * bb.h;
+            const len = 3 + hash(i, this.sid, 13) * 8;
+            const ang = hash(i, this.sid, 14) * Math.PI;
+            ctx.moveTo(fx, fy);
+            ctx.lineTo(fx + Math.cos(ang) * len, fy + Math.sin(ang) * len);
+          }
+          ctx.stroke();
+          ctx.restore();
+        }
+        break;
+      }
+      case 'sticky': {
+        ctx.fillStyle = color;
+        ctx.fill(path);
+        if (bb.r > 10 && o.hl !== false) {
+          ctx.save();
+          ctx.clip(path);
+          // 頂端的黏條：比紙面略深，下緣有一條細線
+          const strip = bb.h * 0.17;
+          ctx.fillStyle = 'rgba(0,0,0,0.06)';
+          ctx.fillRect(bb.x, bb.y, bb.w, strip);
+          ctx.fillStyle = 'rgba(0,0,0,0.07)';
+          ctx.fillRect(bb.x, bb.y + strip, bb.w, 1);
+          // 下緣微捲：由透明漸暗
+          const g = ctx.createLinearGradient(0, bb.y + bb.h * 0.7, 0, bb.y + bb.h);
+          g.addColorStop(0, 'rgba(0,0,0,0)');
+          g.addColorStop(1, 'rgba(0,0,0,0.16)');
+          ctx.fillStyle = g;
+          ctx.fillRect(bb.x, bb.y + bb.h * 0.7, bb.w, bb.h * 0.3);
+          // 右下角翹起的小三角
+          const s = Math.min(bb.w, bb.h) * 0.16;
+          const rx = bb.x + bb.w;
+          const by = bb.y + bb.h;
+          ctx.fillStyle = rgba(lighten(color, 0.18), 0.95);
+          ctx.beginPath();
+          ctx.moveTo(rx, by - s);
+          ctx.lineTo(rx - s, by);
+          ctx.lineTo(rx - s, by - s);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        break;
+      }
       case 'jianzhi':
       case 'puppet': {
         ctx.fillStyle = mode === 'puppet' ? rgba(color, 0.86) : color;
@@ -998,6 +1071,60 @@ export class Brush {
     return w;
   }
 
+  /** 剪貼字：每個字貼在各自的紙片上，字型、紙色、大小、傾斜都不同（像勒索信或雜誌剪字）。位置只由字元與順序決定，所以每一幀都一樣 */
+  private cutoutText(s: string, size: number, o: TOpts) {
+    const ctx = this.ctx;
+    const px = this.px;
+    const FONTS_SET: FontId[] = ['serif', 'sans', 'display', 'cond', 'mono', 'grotesk', 'brush', 'script'];
+    const PAPER: Role[] = ['light', 'card', 'light', 'p', 's', 'a', 'q', 'bg2', 'ink'];
+    const chars = Array.from(s);
+    const gap = size * 0.04;
+    const items = chars.map((ch, i) => {
+      const code = ch.codePointAt(0) ?? 0;
+      const font = FONTS_SET[Math.floor(hash(i, code, 92) * FONTS_SET.length)];
+      const fs = size * (0.8 + hash(i, code, 93) * 0.4);
+      ctx.font = fontCss(font, fs);
+      const w = ch.trim() ? ctx.measureText(ch).width : size * 0.3;
+      return { ch, i, code, font, fs, cw: ch.trim() ? w + size * 0.3 : w };
+    });
+    const total = items.reduce((a, it) => a + it.cw, 0) + gap * Math.max(0, items.length - 1);
+    const align = o.align ?? 'center';
+    let cx = align === 'left' ? 0 : align === 'right' ? -total : -total / 2;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const it of items) {
+      const mid = cx + it.cw / 2;
+      cx += it.cw + gap;
+      if (!it.ch.trim()) continue;
+      const rot = (hash(it.i, it.code, 94) - 0.5) * 0.24;
+      const dy = (hash(it.i, it.code, 95) - 0.5) * size * 0.16;
+      const role = PAPER[Math.floor(hash(it.i, it.code, 96) * PAPER.length)];
+      const chip = this.pal[role];
+      const hh = it.fs * 0.62 + size * 0.1;
+      const j = (k: number) => (hash(it.i, it.code, 100 + k) - 0.5) * size * 0.08;
+      ctx.save();
+      ctx.translate(mid, dy);
+      ctx.rotate(rot);
+      ctx.shadowColor = 'rgba(30,20,10,0.38)';
+      ctx.shadowBlur = 4 * px;
+      ctx.shadowOffsetX = 1 * px;
+      ctx.shadowOffsetY = 2.4 * px;
+      ctx.fillStyle = chip;
+      ctx.beginPath();
+      ctx.moveTo(-it.cw / 2 + j(0), -hh + j(1));
+      ctx.lineTo(it.cw / 2 + j(2), -hh + j(3));
+      ctx.lineTo(it.cw / 2 + j(4), hh + j(5));
+      ctx.lineTo(-it.cw / 2 + j(6), hh + j(7));
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.font = fontCss(it.font, it.fs);
+      ctx.fillStyle = readableOn(chip, this.pal.ink, '#FFFFFF');
+      ctx.fillText(it.ch, 0, 0);
+      ctx.restore();
+    }
+  }
+
   text(str: string, x: number, y: number, size: number, fillP: Paint, o: TOpts = {}) {
     this.sid++;
     const ctx = this.ctx;
@@ -1028,6 +1155,12 @@ export class Brush {
     const px = this.px;
     let mode: FillMode = o.mode ?? L.fill;
     if (o.flat && mode !== 'none' && mode !== 'line' && mode !== 'silhouette') mode = 'flat';
+
+    if (L.cutout > 0.3 && mode !== 'none' && mode !== 'line' && mode !== 'silhouette') {
+      this.cutoutText(s, size, o);
+      ctx.restore();
+      return;
+    }
 
     if (L.sticker > 0.2 && o.shadow !== false) {
       ctx.strokeStyle = this.pal.light;
@@ -1119,7 +1252,7 @@ export class Brush {
       ctx.fillText(s, 0, 0);
       ctx.restore();
     }
-    const glow = L.glow > 0.05 || o.glow;
+    const glow = o.glow === false ? false : L.glow > 0.05 || o.glow;
     if (mode !== 'none') {
       if (glow) {
         ctx.shadowColor = color;

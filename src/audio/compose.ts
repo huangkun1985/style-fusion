@@ -1,6 +1,8 @@
 // 作曲器：依曲風規格與隨機種子產生一首可無縫循環的歌。
 // 旋律用「和弦音落在強拍、鄰音經過」的規則生成，同一個樂句 ID 的小節共用隨機決定，所以會有動機的重複與變化。
 import { clamp, hash, lerp, rng, strSeed } from '../engine/util';
+import { PIECE_BY_ID, parsePiece } from './classics';
+import { getImportedMidi, songFromMidi } from './midiImport';
 import { DRUMS, DRUM_NOTE, GENRES, KIT_BY_DRUMS, type DrumName, type GenreSpec, type HookFamily, type RhythmKind } from './genres';
 import { MODE_NAME, SCALES, chordDegrees, chordLabel, chordPitches, nearestDegree, scaleNote, voice, type Mode } from './theory';
 import { NOTE_NAMES, type ChordInfo, type GenreId, type NoteEv, type Song, type Track, type TrackRole } from './types';
@@ -583,7 +585,7 @@ function genComp(c: Ctx): NoteEv[] {
           const hits: [number, number, number][] = [[0, 2.8, 0.7], [3, 2.8, 0.55], [6, 1.8, 0.6], [8, 2.8, 0.66], [11, 2.8, 0.55], [14, 1.8, 0.55]];
           for (const [s, d, v] of hits) {
             hit(s, d, v + (c.meter === 4 ? 0 : 0));
-            if (s === 0 || s === 8) out.push({ t: base + s, dur: Math.min(d + 1, len - s), pitch: ch.pitches[0] - 12 + (ch.pitches[0] - 12 < 36 ? 12 : 0), vel: 0.5 });
+            if ((s === 0 || s === 8) && s < len) out.push({ t: base + s, dur: Math.min(d + 1, len - s), pitch: ch.pitches[0] - 12 + (ch.pitches[0] - 12 < 36 ? 12 : 0), vel: 0.5 });
           }
           break;
         }
@@ -684,6 +686,8 @@ function parseDrum(p: string | undefined, spb: number): [number, number][] {
 
 function genDrums(c: Ctx): NoteEv[] {
   const out: NoteEv[] = [];
+  // 鼓型是 none 的曲風（鋼琴獨奏、純樂器…）完全不放鼓；三拍子才用華爾茲鼓型
+  if (c.spec.drums === 'none') return out;
   const base = DRUMS[c.spec.drums] ?? {};
   const pat = c.meter === 3 ? DRUMS.waltz : base;
   const names = Object.keys(pat) as DrumName[];
@@ -729,9 +733,19 @@ export interface ComposeOpts {
   energyMul?: number;
   /** 優先讓每次動畫循環剛好是整數拍（視覺有節拍脈動時） */
   preferLock?: boolean;
+  /** 名曲 id（classics.ts）：旋律與和弦照原曲，genre 變成「編曲風格」；'import' 是使用者匯入的 MIDI */
+  piece?: string;
+  /** 匯入的 MIDI：從第幾小節開始、取幾小節（0＝自動） */
+  midiStart?: number;
+  midiBars?: number;
 }
 
 export function composeSong(o: ComposeOpts): Song {
+  if (o.piece === 'import') {
+    const imp = getImportedMidi();
+    if (imp) return songFromMidi(imp, { animSeconds: o.animSeconds, sync: o.sync, tempo: o.tempo, key: o.key, start: o.midiStart ?? 0, bars: o.midiBars ?? 0, preferLock: o.preferLock });
+  }
+  if (o.piece && PIECE_BY_ID[o.piece]) return composeFromPiece(o);
   const base = GENRES[o.genre];
   const spec: GenreSpec = o.energyMul && o.energyMul !== 1 ? { ...base, energy: clamp(base.energy * o.energyMul, 0.1, 1) } : base;
   const rnd = rng(seedOf(o.seed, strSeed(o.genre) & 0xffff, 5));
@@ -802,6 +816,133 @@ export function composeSong(o: ComposeOpts): Song {
   const steps = bars * spb;
   return {
     title: `${spec.name} · ${NOTE_NAMES[key]} ${MODE_NAME[mode]} · ${Math.round(plan.bpm)} BPM`,
+    genre: o.genre,
+    bpm: plan.bpm,
+    meter,
+    stepsPerBar: spb,
+    bars,
+    steps,
+    swing: spec.swing,
+    key,
+    mode,
+    tracks,
+    chords: chordInfos,
+    seconds: steps * stepSec,
+    animSeconds: o.animSeconds,
+    animLoops: plan.animLoops,
+    beatLocked: plan.beatLocked,
+  };
+}
+
+// ---------- 名曲 ----------
+/** 名曲的循環：整首（可重複 reps 次）剛好是動畫循環的整數倍。XM 只有一個 256 列的樂段，所以總步數不能超過 256。 */
+export function planPieceLoop(animSeconds: number, bars: number, meter: 3 | 4, target: number, sync: boolean, preferLock = false): LoopPlan & { reps: number } {
+  const spb = meter === 3 ? 12 : 16;
+  const beats = bars * meter;
+  const maxReps = Math.max(1, Math.min(4, Math.floor(256 / (bars * spb))));
+  if (sync) {
+    let best: (LoopPlan & { reps: number; score: number }) | null = null;
+    for (let reps = 1; reps <= maxReps; reps++) {
+      for (let k = 1; k <= 60; k++) {
+        const len = k * animSeconds;
+        const bpm = (reps * beats * 60) / len;
+        if (bpm < 40 || bpm > 200) continue;
+        const locked = (reps * beats) % k === 0;
+        let score = Math.abs(Math.log(bpm / target)) * 1.6 + (reps - 1) * 0.06;
+        if (!locked) score += preferLock ? 0.9 : 0.1;
+        if (len < 8) score += (8 - len) * 0.08;
+        if (len > 75) score += (len - 75) * 0.03;
+        if (!best || score < best.score) best = { bars: bars * reps, bpm, animLoops: k, synced: true, beatLocked: locked, reps, score };
+      }
+    }
+    if (best) return { bars: best.bars, bpm: best.bpm, animLoops: best.animLoops, synced: true, beatLocked: best.beatLocked, reps: best.reps };
+  }
+  return { bars, bpm: clamp(target, 40, 200), animLoops: 0, synced: false, beatLocked: false, reps: 1 };
+}
+
+/** 用名曲的旋律與和弦，配上指定曲風的低音、伴奏、鼓與音色 */
+function composeFromPiece(o: ComposeOpts): Song {
+  const pp = parsePiece(PIECE_BY_ID[o.piece!]);
+  const piece = pp.piece;
+  const base = GENRES[o.genre];
+  const meter = piece.meter;
+  const spb = pp.spb;
+  const perBar = piece.chordsPerBar;
+  const spec: GenreSpec = { ...base, meter, chordsPerBar: perBar, energy: clamp(base.energy * (o.energyMul ?? 1), 0.1, 1), harmony: piece.round ? false : base.harmony };
+  const target = piece.bpm * o.tempo * clamp(o.bpmMul ?? 1, 0.88, 1.12);
+  const plan = planPieceLoop(o.animSeconds, pp.bars, meter, target, o.sync, !!o.preferLock);
+  const reps = plan.bars / pp.bars;
+  const bars = plan.bars;
+  // 移調：選了調性就把整首平移到那個調（取 −5…+6 個半音，音域變化最小）
+  const want = o.key >= 0 ? o.key : piece.key;
+  let sh = (((want - piece.key) % 12) + 12) % 12;
+  if (sh > 6) sh -= 12;
+  const key = (piece.key + sh + 12) % 12;
+  const mode = piece.mode;
+
+  const chords: BarChord[][] = [];
+  const chordInfos: ChordInfo[] = [];
+  for (let b = 0; b < bars; b++) {
+    const row: BarChord[] = pp.chords[b % pp.bars].map((pc, ci) => {
+      const rootPc = (pc.rootPc + sh + 12) % 12;
+      let r = 48 + rootPc;
+      if (r > 53) r -= 12;
+      const pitches = pc.intervals.map((i) => r + i);
+      const start = ci * (spb / perBar);
+      const info = chordLabel(pitches);
+      chordInfos.push({ bar: b, step: start, root: info.root, quality: info.quality, notes: pitches, label: info.label });
+      return { degree: nearestDegree(key, mode, r), start, len: spb / perBar, pitches, rootPc };
+    });
+    chords.push(row);
+  }
+  const ctx: Ctx = {
+    spec,
+    seed: seedOf(o.seed, strSeed(piece.id) & 0xffff, 1),
+    bars,
+    spb,
+    meter,
+    key,
+    mode,
+    chords,
+    chordAt: (bar, step) => {
+      let cur = chords[bar % bars][0];
+      for (const ch of chords[bar % bars]) if (step >= ch.start) cur = ch;
+      return cur;
+    },
+  };
+
+  const steps = bars * spb;
+  const legato = piece.legato ?? 0.95;
+  const lead: NoteEv[] = [];
+  for (let rep = 0; rep < reps; rep++) {
+    for (const n of pp.notes) {
+      const t = rep * pp.bars * spb + n.t;
+      lead.push({ t, dur: clamp(n.dur * legato, 0.5, steps - t), pitch: n.pitch + sh, vel: clamp((n.t % spb === 0 ? 0.9 : n.t % 4 === 0 ? 0.82 : 0.72) + (spec.energy - 0.5) * 0.1, 0.35, 1) });
+    }
+  }
+
+  const tracks: Track[] = [];
+  const push = (id: string, role: TrackRole, notes: NoteEv[], gain: number, pan: number, drum = false) => {
+    if (!notes.length) return;
+    tracks.push({ id, role, program: spec.prog[role] ?? 0, notes, pan, gain, drum });
+  };
+  push('lead', 'lead', lead, 0.95, 0);
+  if (piece.round) {
+    const delay = piece.round * spb;
+    push('round', 'counter', lead.map((n) => ({ ...n, t: (n.t + delay) % steps, dur: Math.min(n.dur, steps - ((n.t + delay) % steps)), vel: n.vel * 0.72 })).sort((a, b) => a.t - b.t), 0.8, 0.25);
+  }
+  if (spec.harmony) push('counter', 'counter', genHarmony(ctx, lead), 0.7, 0.22);
+  if (spec.arp) push('arp', 'arp', genArp(ctx), 0.62, -0.3);
+  push('bass', 'bass', genBass(ctx), 0.95, 0);
+  if (spec.pad) push('pad', 'pad', genPad(ctx), 0.55, 0.12);
+  if (spec.comp !== 'none') push('chord', 'chord', genComp(ctx), 0.7, 0.28);
+  push('drums', 'perc', genDrums(ctx), 1, 0, true);
+  const dt = tracks.find((t) => t.drum);
+  if (dt) dt.kit = spec.kit ?? KIT_BY_DRUMS[spec.drums] ?? 'hybrid';
+
+  const stepSec = 60 / plan.bpm / 4;
+  return {
+    title: `${piece.name} · ${GENRES[o.genre].name}編曲 · ${NOTE_NAMES[key]} ${MODE_NAME[mode]} · ${Math.round(plan.bpm)} BPM`,
     genre: o.genre,
     bpm: plan.bpm,
     meter,

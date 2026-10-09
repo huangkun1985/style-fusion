@@ -42,7 +42,9 @@ export type FillMode =
   | 'jianzhi'
   | 'puppet'
   | 'silhouette'
-  | 'offset';
+  | 'offset'
+  | 'paper'
+  | 'sticky';
 export type StrokeStyle = 'solid' | 'sketch' | 'brush' | 'dashed' | 'glow' | 'chalk' | 'pencil';
 export type StrokeColor = 'ink' | 'darker' | 'lighter' | 'fill' | 'light' | 'accent';
 export type ShadowType = 'none' | 'soft' | 'hard' | 'long' | 'extrude' | 'paper';
@@ -128,6 +130,8 @@ export interface LookPatch {
   shadowColor?: string;
   glow?: number;
   sticker?: number;
+  /** 剪貼字：每個字貼在各自的紙片上（字型、紙色、傾斜各異），像勒索信／雜誌剪字 */
+  cutout?: number;
   font?: FontId;
   upper?: boolean;
   deco?: string[];
@@ -159,6 +163,7 @@ export interface Look {
   shadowColor: string;
   glow: number;
   sticker: number;
+  cutout: number;
   font: FontId;
   upper: boolean;
   deco: { id: string; a: number }[];
@@ -260,14 +265,22 @@ export type SubjectId =
   | 'walk'
   | 'abstract'
   | 'chart'
+  | 'loader'
+  | 'logo'
+  | 'fireworks'
+  | 'weather'
+  | 'portrait'
+  | 'music'
+  | 'custom'
   | 'voxel'
   | 'shapes3d'
   | 'char3d'
   | 'text3d'
-  | 'terrain3d';
+  | 'terrain3d'
+  | 'product3d';
 
 /** 真 3D（Three.js）主體 */
-export const SUBJECTS_3D: SubjectId[] = ['voxel', 'shapes3d', 'char3d', 'text3d', 'terrain3d'];
+export const SUBJECTS_3D: SubjectId[] = ['voxel', 'shapes3d', 'char3d', 'text3d', 'terrain3d', 'product3d'];
 export const is3D = (id: SubjectId) => SUBJECTS_3D.includes(id);
 
 export interface Tune {
@@ -279,4 +292,6 @@ export interface Tune {
   fxMul: number;
   loopMul: number;
   custom: Partial<Palette>;
+  /** 優先使用我的顏色（自訂色板與主題自帶的色板）：預設開；關閉時以圖像風格的色板為準。沒寫＝開 */
+  keepColors?: boolean;
 }

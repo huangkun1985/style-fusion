@@ -119,7 +119,8 @@ export const walk: Subject = {
     S.push();
     S.jitter(1);
     // 遠側
-    arm(ph, true, 1);
+    // 手臂與同側的腿反相：同側的腿往前時，這一側的手往後（以前相位接反，變成同手同腳）
+    arm(ph + Math.PI, true, 1);
     leg(ph + Math.PI, true, 2);
     // 軀幹
     S.line([hip[0], hip[1], neck[0], neck[1]], 'p', { w: 32, cap: 'round', outlined: true });
@@ -132,7 +133,7 @@ export const walk: Subject = {
     S.curve(sc, 'a', { w: 9, outlined: true });
     // 近側
     leg(ph, false, 3);
-    arm(ph + Math.PI, false, 4);
+    arm(ph, false, 4);
     // 頭（延遲跟隨）
     const hd = (hy2 - hy) * 0.6 * clamp(mv.follow + 0.2);
     const hx = neck[0] + 6;

@@ -135,9 +135,25 @@ export class Renderer {
     return !this.postFailed;
   }
 
+  private postBorn = 0;
+  private postLosses = 0;
+
   private ensurePost(): PostFX | null {
     if (!this.useGL || this.postFailed) return null;
+    // WebGL 被瀏覽器收回時（顯示卡重置、分頁擱置太久…）要重建，否則像素化、色板量化、水彩等後期特效會從此靜默失效，畫面退回沒有後期的原圖
+    if (this.post?.lost) {
+      const now = performance.now();
+      if (now - this.postBorn < 1000) return null; // 剛重建就又被收回：先等一下，不要每幀都重建
+      this.postLosses++;
+      if (this.postLosses >= 5) {
+        this.postFailed = true;
+        this.post = null;
+        return null;
+      }
+      this.post = null;
+    }
     if (!this.post) {
+      this.postBorn = performance.now();
       this.post = new PostFX();
       if (!this.post.ok) {
         this.postFailed = true;

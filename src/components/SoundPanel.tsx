@@ -1,6 +1,9 @@
 // 「聲音」分頁：BGM／音效開關與音量、聲音方案、曲風、節奏、音效包、鋼琴捲簾預覽與導出。
-import { Dices, Download, Loader2, Pause, Play, Volume2, VolumeX } from 'lucide-react';
+import { Dices, Download, Loader2, Pause, Play, Upload, Volume2, VolumeX, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_BARS, MAX_BARS, getImportedMidi } from '../audio/midiImport';
+import { MODE_NAME } from '../audio/theory';
+import { PIECES, PIECE_BY_ID, PIECE_GROUPS } from '../audio/classics';
 import { CueTracker } from '../audio/cues';
 import { audioEngine } from '../audio/engine';
 import { makeAudioFile, type AudioFileKind } from '../audio/files';
@@ -30,7 +33,8 @@ const GENRE_GROUPS: { name: string; ids: GenreId[] }[] = [
   { name: '流行與人聲系', ids: ['pop', 'kpop', 'jpop', 'cpop', 'kawaii', 'ballad', 'rnb', 'citypop', 'acoustic'] },
   { name: '舞曲與電子', ids: ['house', 'disco', 'trap', 'hiphop', 'funk', 'synthwave', 'techno', 'cyber', 'vapor'] },
   { name: '搖滾、爵士與世界', ids: ['rock', 'jazz', 'bossa', 'reggae', 'latin', 'lofi', 'folk', 'ragtime'] },
-  { name: '管弦、氛圍與東方', ids: ['cinematic', 'classical', 'wonder', 'hero', 'ambient', 'eastern'] },
+  { name: '純樂器（沒有鼓）', ids: ['classical', 'solopiano', 'violin', 'cello', 'guitar', 'flute', 'sax', 'harp', 'quartet', 'brass', 'mallet', 'organ', 'musicbox'] },
+  { name: '管弦、氛圍與東方', ids: ['cinematic', 'wonder', 'hero', 'ambient', 'eastern'] },
   { name: '遊戲與復古', ids: ['chipAdventure', 'chipDark'] },
 ];
 
@@ -42,7 +46,8 @@ function PianoRoll({ song }: { song: Song }) {
   const { look, move, tune } = useLookMove();
   const subject = useStore((s) => s.subject);
   const aspect = useStore((s) => s.aspect);
-  const cues = useMemo(() => new CueTracker(subject, move, tune, look, ASPECT[aspect]).cues, [subject, move, tune, look, aspect]);
+  const themeRev = useStore((s) => s.themeRev);
+  const cues = useMemo(() => new CueTracker(subject, move, tune, look, ASPECT[aspect]).cues, [subject, move, tune, look, aspect, themeRev]);
   const stRef = useRef({ song, cues });
   stRef.current = { song, cues };
 
@@ -150,6 +155,20 @@ export function SoundTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const song = plan.song;
   const effScheme = plan.scheme;
+  const isImport = prefs.piece === 'import';
+  const piece = prefs.piece === 'off' || isImport ? null : PIECE_BY_ID[prefs.piece];
+  useStore((s) => s.midiRev); // 匯入或移除檔案時重畫
+  const imp = getImportedMidi();
+  const importMidi = useStore((s) => s.importMidi);
+  const clearMidi = useStore((s) => s.clearMidi);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const loadMidiFile = async (f: File | undefined) => {
+    if (!f) return;
+    if (f.size > 5 * 1024 * 1024) return showToast('檔案太大（超過 5 MB），這不像一般的 MIDI 檔');
+    const err = importMidi(await f.arrayBuffer(), f.name);
+    if (err) showToast(`匯入失敗：${err}`);
+  };
 
   const exportFile = async (kind: AudioFileKind) => {
     setBusy(kind);
@@ -169,7 +188,21 @@ export function SoundTab() {
   const total = song.animLoops ? `${song.animLoops} 次動畫循環 = ${song.bars} 小節` : `${song.bars} 小節（未與動畫對齊）`;
 
   return (
-    <div className="flex flex-col gap-5 pb-4">
+    <div
+      className={`flex flex-col gap-5 pb-4 ${dragging ? 'rounded-xl outline-dashed outline-2 outline-mot' : ''}`}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        void loadMidiFile(e.dataTransfer.files[0]);
+      }}
+    >
       {/* 主開關 */}
       <div className="flex flex-col gap-3 rounded-xl border border-line bg-panel-2 p-3">
         <div className="flex items-center justify-between gap-3">
@@ -260,10 +293,96 @@ export function SoundTab() {
         <p className="mt-1.5 text-[11px] leading-relaxed text-fg-3">{SCHEME_INFO[effScheme].desc}</p>
       </div>
 
-      {/* 曲風：自動選項獨立一行，下面的標籤位置固定，點選不會改變排版 */}
+      {/* 名曲：公共領域的經典作品；選了之後，旋律與和弦照原曲，下面的「曲風」變成編曲風格 */}
       <div>
-        <SectionTitle>曲風</SectionTitle>
-        <AutoRow on={prefs.genre === 'auto'} onClick={() => setAudio({ genre: 'auto' })} now={GENRES[plan.genre]?.name ?? ''} />
+        <SectionTitle>名曲</SectionTitle>
+        <div className="flex items-center gap-2">
+          <Chip on={prefs.piece === 'off'} onClick={() => setAudio({ piece: 'off' })} label="不用名曲（自動作曲）" />
+          <span className="min-w-0 truncate text-[11px] text-fg-3">{piece ? `目前：${piece.name}` : isImport && imp ? `目前：${imp.name}（我的 MIDI）` : '旋律由程式依風格即時作曲'}</span>
+        </div>
+        <div className="mt-2 flex flex-col gap-2">
+          {PIECE_GROUPS.map((g) => (
+            <div key={g.id}>
+              <div className="mb-1 text-[11px] text-fg-3">{g.name}</div>
+              <div className="flex flex-wrap gap-1">
+                {PIECES.filter((p) => p.group === g.id).map((p) => (
+                  <Chip key={p.id} on={prefs.piece === p.id} onClick={() => setAudio({ piece: p.id })} label={p.name} title={`${p.composer}\n${p.desc}`} />
+                ))}
+              </div>
+            </div>
+          ))}
+          <div>
+            <div className="mb-1 text-[11px] text-fg-3">我的 MIDI（檔案只在你的瀏覽器裡處理，不會上傳）</div>
+            <div className="flex flex-wrap items-center gap-1">
+              {imp && <Chip on={isImport} onClick={() => setAudio({ piece: 'import' })} label={imp.name} title="使用你匯入的 MIDI" />}
+              {imp && (
+                <button type="button" aria-label="移除匯入的 MIDI" title="移除匯入的 MIDI" onClick={clearMidi} className="flex size-6 items-center justify-center rounded text-fg-3 hover:text-fg">
+                  <X size={13} />
+                </button>
+              )}
+              <Button size="xs" variant="soft" onClick={() => fileRef.current?.click()} title="選一個 .mid 檔；也可以直接把檔案拖進這個分頁">
+                <Upload size={13} /> {imp ? '換一個 MIDI…' : '匯入 MIDI…'}
+              </Button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".mid,.midi,.kar,audio/midi,audio/x-midi"
+                className="hidden"
+                onChange={(e) => {
+                  void loadMidiFile(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        <p className="mt-2 min-h-[3.4rem] text-[11px] leading-relaxed text-fg-3">
+          {isImport && imp ? (
+            <>
+              <span className="text-fg-2">
+                {imp.sourceTracks} 個音軌 · {imp.bars} 小節 · 原速約 {Math.round(imp.bpm)} BPM{imp.tempoChanges > 1 ? '（有變速）' : ''} · {NOTE_NAMES[imp.key]} {MODE_NAME[imp.mode]} · {imp.meter === 3 ? '三拍' : '四拍'}
+              </span>
+              。{imp.droppedTracks ? `軌道太多，只留下音符最多的 ${imp.tracks.filter((t) => !t.drum).length} 軌。` : ''}
+              {imp.persisted ? '檔案已存在這個瀏覽器裡，下次打開還在。' : '檔案較大，重新整理頁面後要再匯入一次。'}
+            </>
+          ) : piece ? (
+            <>
+              <span className="text-fg-2">{piece.composer}</span>。{piece.desc}
+            </>
+          ) : (
+            '只收錄已進入公共領域的作品（作曲者過世超過 70 年，或傳統曲調）。選一首，再到下面換曲風，就能聽到同一首歌的不同編曲。'
+          )}
+        </p>
+      </div>
+
+      {/* 匯入的 MIDI：取哪一段，以及怎麼轉成別的格式 */}
+      {isImport && imp && (
+        <div className="flex flex-col gap-3 rounded-xl border border-line bg-panel-2 p-3">
+          <SectionTitle right={<span className="num text-[11px] text-fg-3">共 {imp.bars} 小節</span>}>取哪一段</SectionTitle>
+          <Slider id="midi-start" label="起始小節" min={1} max={imp.bars} step={1} value={Math.min(imp.bars, prefs.midiStart + 1)} onChange={(x) => setAudio({ midiStart: Math.round(x) - 1 })} format={(x) => `第 ${Math.round(x)} 小節`} tone="mot" />
+          <Slider id="midi-bars" label="長度" min={1} max={Math.min(MAX_BARS, imp.bars)} step={1} value={Math.min(song.bars, MAX_BARS)} onChange={(x) => setAudio({ midiBars: Math.round(x) })} format={(x) => `${Math.round(x)} 小節`} tone="mot" />
+          <div className="flex flex-wrap items-center gap-1">
+            <Chip on={prefs.midiStart === 0 && prefs.midiBars === 0} onClick={() => setAudio({ midiStart: 0, midiBars: 0 })} label={`預設（從頭最多 ${DEFAULT_BARS} 小節）`} />
+            <Chip on={prefs.midiStart === 0 && prefs.midiBars === Math.min(MAX_BARS, imp.bars)} onClick={() => setAudio({ midiStart: 0, midiBars: Math.min(MAX_BARS, imp.bars) })} label={imp.bars > MAX_BARS ? `前 ${MAX_BARS} 小節` : '整首'} />
+          </div>
+          <p className="text-[11px] leading-relaxed text-fg-3">
+            長度越長，渲染越久、XM 檔也越大。取到的這一段會跟著動畫循環播放（速度可能微調幾個百分點來對齊，在「節奏與調性」關掉「對齊動畫循環」就是原速）。
+          </p>
+        </div>
+      )}
+
+      {/* 曲風：自動選項獨立一行，下面的標籤位置固定，點選不會改變排版 */}
+      {isImport && imp ? (
+        <div>
+          <SectionTitle>轉成其他格式</SectionTitle>
+          <p className="text-[12px] leading-relaxed text-fg-2">
+            匯入的 MIDI 用原檔的音軌與音色，所以沒有曲風可選。用上面的「聲音方案」轉成 8-bit NES、Game Boy、C64 SID、Mega Drive FM、MIDI 取樣樂器或 XM 追蹤器（每個方案旁的 ▶ 可以直接試聽），再到最下面的「導出音訊」存成 WAV、MIDI 或 XM。
+          </p>
+        </div>
+      ) : (
+      <div>
+        <SectionTitle>{piece ? '編曲風格' : '曲風'}</SectionTitle>
+        <AutoRow on={prefs.genre === 'auto'} onClick={() => setAudio({ genre: 'auto' })} now={GENRES[plan.genre]?.name ?? ''} label={piece ? '自動（這首的建議編曲）' : undefined} />
         <div className="mt-2 flex flex-col gap-2">
           {GENRE_GROUPS.map((g) => (
             <div key={g.name}>
@@ -278,6 +397,7 @@ export function SoundTab() {
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-fg-3">{GENRES[plan.genre]?.desc}</p>
       </div>
+      )}
 
       {/* 節奏與調性 */}
       <div className="flex flex-col gap-3">
@@ -297,7 +417,7 @@ export function SoundTab() {
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-fg-2">不喜歡這一版？換個旋律</span>
+          <span className="text-xs text-fg-2">{isImport ? '匯入的 MIDI 沒有隨機成分' : piece ? '名曲的旋律固定，這裡只換鼓點細節' : '不喜歡這一版？換個旋律'}</span>
           <Button size="xs" variant="soft" onClick={() => setAudio({ seed: Math.floor(Math.random() * 9999) })}>
             <Dices size={13} /> 重新作曲 <span className="num">#{prefs.seed}</span>
           </Button>
@@ -365,10 +485,10 @@ function Chip({ on, onClick, label, title }: { on: boolean; onClick: () => void;
 }
 
 /** 「自動」選項：獨立一行，文字固定；目前實際用的是什麼顯示在右邊 */
-function AutoRow({ on, onClick, now }: { on: boolean; onClick: () => void; now: string }) {
+function AutoRow({ on, onClick, now, label }: { on: boolean; onClick: () => void; now: string; label?: string }) {
   return (
     <div className="flex items-center gap-2">
-      <Chip on={on} onClick={onClick} label="自動（跟隨風格）" />
+      <Chip on={on} onClick={onClick} label={label ?? '自動（跟隨風格）'} />
       <span className="min-w-0 truncate text-[11px] text-fg-3">目前：{now}</span>
     </div>
   );

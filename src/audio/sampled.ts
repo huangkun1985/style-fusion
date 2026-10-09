@@ -3,7 +3,7 @@
 import type { Model } from './gm';
 import { PACK_PROGRAM } from './pack/meta';
 import { drumSamples, instrument, loadDrums, loadInstrument, samplerAvailable, zoneFor, type SampledInst } from './sampler';
-import type { Song } from './types';
+import type { Song, TrackRole } from './types';
 
 const TAU = Math.PI * 2;
 
@@ -73,6 +73,11 @@ const SPECIAL: Record<number, Voice> = {
   10: { ids: ['glock'], att: 0.001, rel: 0.7, gain: 1.6 },
   8: { ids: ['glock'], att: 0.001, rel: 0.8, gain: 1.6, dark: 0.7 },
 };
+
+/** 取樣音色已做響度校正，這裡只調整各聲部之間的相對大小（MIDI 與 XM 方案共用） */
+export const ROLE_MIX: Record<TrackRole, number> = { lead: 1, counter: 0.85, arp: 0.8, bass: 0.75, pad: 0.9, chord: 0.7, perc: 1 };
+/** 各聲部送進殘響的量（MIDI 與 XM 方案共用） */
+export const SEND: Record<TrackRole, number> = { lead: 0.3, arp: 0.34, bass: 0.04, pad: 0.55, chord: 0.28, counter: 0.32, perc: 0.1 };
 
 export function voiceOf(p: number): Voice | null {
   const sp = SPECIAL[p];

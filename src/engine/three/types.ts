@@ -3,7 +3,7 @@ import type { MotionCtx } from '../motion';
 import type { Look } from '../types';
 import type { MatKit } from './materials';
 
-export type Scene3DId = 'island' | 'shapes' | 'text' | 'character' | 'terrain';
+export type Scene3DId = 'island' | 'shapes' | 'text' | 'character' | 'terrain' | 'island2' | 'shapes2' | 'text2' | 'character2' | 'terrain2' | 'product';
 
 /** 預設鏡頭：以目標點為中心的球座標 */
 export interface CamBase {

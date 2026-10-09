@@ -30,6 +30,9 @@ export class PostFX {
   canvas: HTMLCanvasElement;
   gl: WebGL2RenderingContext | null = null;
   ok = false;
+  /** 瀏覽器把 WebGL 內容收回去了（顯示卡重置、分頁被擱置、內容數量上限…）；不是我們自己 dispose 的。Renderer 看到這個旗標會重建 */
+  lost = false;
+  private disposed = false;
   private progs = new Map<string, Prog | null>();
   private vao: WebGLVertexArrayObject | null = null;
   private srcTex: WebGLTexture | null = null;
@@ -70,6 +73,7 @@ export class PostFX {
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.ok = false;
+      if (!this.disposed) this.lost = true;
     });
     this.ok = !!this.prog('copy');
   }
@@ -277,6 +281,7 @@ export class PostFX {
   }
 
   dispose() {
+    this.disposed = true;
     const ext = this.gl?.getExtension('WEBGL_lose_context');
     ext?.loseContext();
     this.ok = false;

@@ -37,7 +37,20 @@ export type GenreId =
   | 'classical'
   | 'reggae'
   | 'jpop'
-  | 'cpop';
+  | 'cpop'
+  // 純樂器
+  | 'solopiano'
+  | 'violin'
+  | 'cello'
+  | 'guitar'
+  | 'flute'
+  | 'sax'
+  | 'harp'
+  | 'quartet'
+  | 'brass'
+  | 'mallet'
+  | 'organ'
+  | 'musicbox';
 
 /** 音效包 */
 export type PackId = '8bit' | 'cartoon' | 'ui' | 'scifi' | 'natural';
@@ -59,7 +72,9 @@ export type SfxKind =
   | 'rise'
   | 'drop'
   | 'flip'
-  | 'blip';
+  | 'blip'
+  | 'splash'
+  | 'quack';
 
 export interface AudioPrefs {
   /** 主開關（音樂與音效都靜音） */
@@ -78,6 +93,11 @@ export interface AudioPrefs {
   tempo: number;
   /** 調性：-1 自動，0–11 = C…B */
   key: number;
+  /** 名曲：'off' 用自動作曲；'import' 是使用者匯入的 MIDI；否則是 classics.ts 裡的曲目 id（曲風改為「編曲風格」） */
+  piece: string;
+  /** 匯入的 MIDI 要取哪一段：從第幾小節開始（0 起算）、取幾小節（0＝自動） */
+  midiStart: number;
+  midiBars: number;
 }
 
 export const AUDIO_DEFAULT: AudioPrefs = {
@@ -93,6 +113,9 @@ export const AUDIO_DEFAULT: AudioPrefs = {
   seed: 11,
   tempo: 1,
   key: -1,
+  piece: 'off',
+  midiStart: 0,
+  midiBars: 0,
 };
 
 export type TrackRole = 'lead' | 'arp' | 'bass' | 'pad' | 'chord' | 'counter' | 'perc';

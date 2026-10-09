@@ -1,4 +1,4 @@
-// 音效合成：5 個音效包 × 17 種音效，全部由程式生成。
+// 音效合成：5 個音效包 × 19 種音效，全部由程式生成。
 // 每個音效是「音高掃描 + 噪音 + 鈴音」的組合，音效包只改變波形、軟硬度、音高與量化。
 import { Noise, Svf } from './dsp';
 import type { PackId, SfxKind } from './types';
@@ -176,6 +176,8 @@ export const SFX_KINDS: { id: SfxKind; name: string }[] = [
   { id: 'drop', name: '下降' },
   { id: 'flip', name: '翻轉' },
   { id: 'blip', name: '短嗶' },
+  { id: 'splash', name: '水花' },
+  { id: 'quack', name: '鴨叫' },
 ];
 
 export const PACK_INFO: Record<PackId, { name: string; desc: string }> = {
@@ -272,6 +274,28 @@ export function synthSfx(pack: PackId, kind: SfxKind, sr: number, variant = 0): 
     case 'blip':
       y.sweep(0, 0.07, 880, 880, expo(0.025), 1, { fm: sci ? 1.5 : 0 });
       break;
+    case 'splash': {
+      // 入水的一瞬間：由亮到悶的帶通噪音（水花），底下一個短促的低音，再冒出幾顆上揚的小氣泡
+      y.noise(0, 0.38, (t) => Math.min(1, t / 0.006) * Math.exp(-t / (0.11 * d)), 1, { type: 'bp', fc: nat ? 2200 : 3200, fc2: 700, q: 0.8 });
+      y.sweep(0, 0.12, 240, 90, expo(0.04 * d), 0.55, { wave: bit ? 'tri' : 'sine', fm: 0 });
+      [0.03, 0.08, 0.15, 0.23].forEach((at, i) => {
+        const f = 500 + ((i * 397) % 700);
+        y.sweep(at, 0.07, f, f * 2.1, expo(0.025), 0.28, { wave: bit ? 'pulse' : 'sine', fm: 0, vib: 0 });
+      });
+      break;
+    }
+    case 'quack': {
+      // 「呱—克」：兩段沙啞的窄脈衝波（高頻泛音多，聽起來鼻音重），加 70 Hz 的振幅顫動做出沙啞感
+      const buzz =
+        (len: number): Env =>
+        (t) =>
+          Math.min(1, t / 0.008) * Math.max(0, 1 - t / len) ** 0.8 * (0.7 + 0.3 * Math.sin(TAU * 70 * t));
+      const f = toon ? 1.15 : 1;
+      y.sweep(0, 0.13, 520 * f, 400 * f, buzz(0.13), 1, { wave: 'pulse', duty: 0.18 });
+      y.sweep(0.11, 0.1, 380 * f, 260 * f, buzz(0.1), 0.8, { wave: 'pulse', duty: 0.22 });
+      y.noise(0, 0.1, expo(0.03), 0.25, { type: 'bp', fc: 1800, q: 1.2 });
+      break;
+    }
   }
   return y.finish(0.8);
 }

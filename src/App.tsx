@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import { InfoPanel } from './components/InfoPanel';
 import { MixTray } from './components/MixTray';
 import { ExportModal, ShareModal, StyleDetailModal } from './components/Modals';
-import { Stage } from './components/Stage';
+import { Stage, toggleStageFullscreen } from './components/Stage';
 import { StyleBrowser } from './components/StyleBrowser';
 import { TopBar } from './components/TopBar';
 import { AudioBridge } from './components/AudioBridge';
 import { StarterModal } from './components/Starter';
+import { ThemeModal } from './components/ThemeModal';
 import { Toast, Segmented } from './components/ui';
 import { LibraryView, RecipesView, SavedView } from './components/Views';
 import { clock } from './engine/clock';
@@ -141,6 +142,7 @@ export default function App() {
       else if (e.key === 'g' || e.key === 'G') s.set({ grid4: !s.grid4 });
       else if (e.key === 'm' || e.key === 'M') void toggleSound();
       else if (e.key === 'r' || e.key === 'R') s.randomize();
+      else if (e.key === 'f' || e.key === 'F') toggleStageFullscreen();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -159,6 +161,7 @@ export default function App() {
       <ExportModal />
       <ShareModal />
       <StarterModal />
+      <ThemeModal />
       <AudioBridge />
       <Toast />
     </div>

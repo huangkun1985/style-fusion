@@ -293,6 +293,20 @@ function TuneTab() {
         <SectionTitle right={Object.keys(tune.custom).length > 0 && <Button size="xs" variant="ghost" onClick={() => setTune({ custom: {} })}>還原色板</Button>}>
           自訂色板
         </SectionTitle>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-fg-2">遇到會換色的風格（白模、8-bit、積木…）</span>
+          <Segmented
+            id="t-keep"
+            size="sm"
+            value={tune.keepColors === false ? 'style' : 'mine'}
+            onChange={(x) => setTune({ keepColors: x === 'mine' })}
+            className="w-full [&>button]:flex-1"
+            options={[
+              { value: 'mine', label: '優先用我的顏色', title: '自訂色板與主題自帶的顏色蓋過風格的色板；8-bit、16-bit、積木等量化風格會把你的顏色加進它們的調色板，所以顏色不會被換掉' },
+              { value: 'style', label: '以風格為準', title: '完全照風格的色板與調色板：白模變白、8-bit 換成它的 16 色（自訂色板暫時失效）' },
+            ]}
+          />
+        </div>
         <div className="grid grid-cols-2 gap-1.5">
           {PAL_KEYS.map((k) => (
             <label key={k} htmlFor={`pal-${k}`} className="flex items-center gap-2 rounded-md border border-line bg-panel-2 px-2 py-1 text-xs">
@@ -346,7 +360,7 @@ function useSoundSpec(): SoundSpec | null {
     const cues = plan.pack ? new CueTracker(subject, move, tune, look, ASPECT[aspect]).cues.map((c) => ({ t: round(c.u * L, 2), kind: c.kind })) : [];
     return {
       title: plan.song.title,
-      genre: GENRES[plan.genre].name,
+      genre: plan.genreLabel,
       scheme: SCHEME_INFO[plan.scheme].name,
       pack: plan.pack ? PACK_INFO[plan.pack].name : null,
       bpm: Math.round(plan.song.bpm),
@@ -435,7 +449,7 @@ function PromptTab() {
   const aspect = useStore((s) => s.aspect);
   const sound = useSoundSpec();
   const p = useMemo(() => aiPrompts(brief, subject, aspect, look, move), [brief, subject, aspect, look, move]);
-  const claude = useMemo(() => claudePrompts(brief, subject, aspect, look, move, sound, jsonCode(v, m, subject, tune, look, move, sound)), [brief, subject, aspect, look, move, sound, v, m, tune]);
+  const claude = useMemo(() => claudePrompts(brief, subject, look, move, sound), [brief, subject, look, move, sound]);
   const blocks: [string, string, string][] = [
     ['圖像生成（英文）', 'Midjourney／Stable Diffusion／Flux', p.imageEn],
     ['圖像生成（中文）', '中文模型或給設計師的描述', p.imageZh],
@@ -452,10 +466,10 @@ function PromptTab() {
 
       <section aria-labelledby="claude-prompt-title" className="rounded-xl border border-mot/50 bg-mot-soft p-3">
         <h3 id="claude-prompt-title" className="text-[13px] font-bold">
-          給 Claude：用程式碼把這個動畫做出來
+          給 Claude：把這套風格套用到我的新專案
         </h3>
         <p className="mt-1 text-[12px] leading-relaxed text-fg-2">
-          和上面的生成工具不同，這份提示詞是叫 Claude「寫程式」：貼到 claude.ai（會直接生成可預覽的 Artifact）或 Claude Code，它會做出單一 HTML 檔、無縫循環、依你選的風格、色板、緩動、節奏，3D 與聲音也會一起交代。結尾附了完整規格 JSON 和驗收清單。
+          只貼這一份提示詞就夠：它把你選的風格（色板、填色、描邊、後期質感、動作、聲音）交給 Claude，並分兩階段進行——<b>階段一先做靜態分鏡，Claude 自己審美打分並修改，然後停下來等你確認</b>；你回覆「確認」（或給修改意見）之後，<b>階段二才在確認過的分鏡上加動效</b>。使用方式：貼上之前，<b>先在「專案內容」那一節填上你要做的事</b>（例如「新中國成立 77 週年大事記的 HTML 動畫」）。資訊不足時它不會先問你，而是自己假設並在階段一最後列出，讓你確認時一併修正。舞台上的示範動畫只是風格範例，不會被照搬。
         </p>
         {(
           [

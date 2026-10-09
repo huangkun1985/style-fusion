@@ -1,0 +1,344 @@
+{
+  "format": "style-fusion-theme",
+  "version": 1,
+  "name": "悠游黃色小鴨",
+  "desc": "經典黃色小鴨在水面上輕快划水前行，伴隨水波蕩漾、身體前後起伏、翅膀拍水與水花節奏音效。",
+  "loop": 2.4,
+  "hero": 0.4,
+  "key": 0.45,
+  "ground": 75,
+  "shadowFor": "duckBody",
+  "shadowSize": 65,
+  "track": "duckBody",
+  "events": [
+    {
+      "u": 0.25,
+      "x": -25,
+      "y": 70,
+      "k": 0.7,
+      "sfx": "step"
+    },
+    {
+      "u": 0.75,
+      "x": -25,
+      "y": 70,
+      "k": 0.7,
+      "sfx": "step"
+    }
+  ],
+  "sounds": [
+    {
+      "u": 0.2,
+      "sfx": "whoosh",
+      "k": 0.5
+    },
+    {
+      "u": 0.45,
+      "sfx": "blip",
+      "k": 0.4
+    },
+    {
+      "u": 0.7,
+      "sfx": "whoosh",
+      "k": 0.5
+    },
+    {
+      "u": 0.95,
+      "sfx": "sparkle",
+      "k": 0.4
+    }
+  ],
+  "layers": [
+    {
+      "id": "backRipple",
+      "type": "ellipse",
+      "rx": 70,
+      "ry": 10,
+      "fill": null,
+      "stroke": "s",
+      "w": 3,
+      "x": -35,
+      "y": 68,
+      "sx": [
+        [0, 0.4, "linear"],
+        [0.5, 1.25, "linear"],
+        [1, 0.4]
+      ],
+      "alpha": [
+        [0, 0.2, "linear"],
+        [0.4, 0.6, "linear"],
+        [0.85, 0, "linear"],
+        [1, 0.2]
+      ]
+    },
+    {
+      "id": "duckGroup",
+      "type": "group",
+      "react": 1.2,
+      "x": [
+        [0, -10, "inOut"],
+        [0.25, 12, "inOut"],
+        [0.5, -6, "inOut"],
+        [0.75, 12, "inOut"],
+        [1, -10]
+      ],
+      "y": [
+        [0, 48, "inOut"],
+        [0.25, 42, "inOut"],
+        [0.5, 49, "inOut"],
+        [0.75, 42, "inOut"],
+        [1, 48]
+      ],
+      "rot": [
+        [0, -2, "inOut"],
+        [0.25, 3.5, "inOut"],
+        [0.5, -2, "inOut"],
+        [0.75, 3.5, "inOut"],
+        [1, -2]
+      ],
+      "children": [
+        {
+          "id": "tailFeather",
+          "type": "polygon",
+          "fill": "#FFCC00",
+          "points": [-46, 6, -72, -14, -50, -8],
+          "delay": 0.08,
+          "rot": [
+            [0, 0, "inOut"],
+            [0.25, -12, "inOut"],
+            [0.5, 8, "inOut"],
+            [0.75, -12, "inOut"],
+            [1, 0]
+          ]
+        },
+        {
+          "id": "duckBody",
+          "type": "ellipse",
+          "rx": 54,
+          "ry": 34,
+          "fill": "#FFD200",
+          "x": 0,
+          "y": 10,
+          "sx": [
+            [0, 1.02, "inOut"],
+            [0.25, 0.98, "inOut"],
+            [0.5, 1.02, "inOut"],
+            [0.75, 0.98, "inOut"],
+            [1, 1.02]
+          ],
+          "sy": [
+            [0, 0.98, "inOut"],
+            [0.25, 1.02, "inOut"],
+            [0.5, 0.98, "inOut"],
+            [0.75, 1.02, "inOut"],
+            [1, 0.98]
+          ]
+        },
+        {
+          "id": "duckBellyHighlight",
+          "type": "ellipse",
+          "rx": 38,
+          "ry": 18,
+          "fill": "#FFE666",
+          "x": 4,
+          "y": 14,
+          "opacity": 0.65
+        },
+        {
+          "id": "headGroup",
+          "type": "group",
+          "x": 28,
+          "y": -26,
+          "delay": 0.05,
+          "rot": [
+            [0, 0, "inOut"],
+            [0.25, 4, "inOut"],
+            [0.5, -3, "inOut"],
+            [0.75, 4, "inOut"],
+            [1, 0]
+          ],
+          "y": [
+            [0, -26, "inOut"],
+            [0.25, -28, "inOut"],
+            [0.5, -25, "inOut"],
+            [0.75, -28, "inOut"],
+            [1, -26]
+          ],
+          "children": [
+            {
+              "id": "headTuft",
+              "type": "curve",
+              "delay": 0.08,
+              "points": [-2, -28, 4, -40, -4, -42],
+              "fill": "#FFCC00",
+              "w": 4.5,
+              "rot": [
+                [0, 0, "inOut"],
+                [0.25, 10, "inOut"],
+                [0.5, -12, "inOut"],
+                [0.75, 10, "inOut"],
+                [1, 0]
+              ]
+            },
+            {
+              "id": "headBase",
+              "type": "circle",
+              "r": 29,
+              "fill": "#FFD200",
+              "x": 0,
+              "y": 0
+            },
+            {
+              "id": "cheekBlush",
+              "type": "circle",
+              "r": 6.5,
+              "fill": "#FF7A45",
+              "x": 6,
+              "y": 8,
+              "opacity": 0.45
+            },
+            {
+              "id": "beakBottom",
+              "type": "ellipse",
+              "rx": 16,
+              "ry": 7,
+              "fill": "#E65A00",
+              "x": 25,
+              "y": 6
+            },
+            {
+              "id": "beakTop",
+              "type": "ellipse",
+              "rx": 20,
+              "ry": 8.5,
+              "fill": "#FF6B00",
+              "x": 26,
+              "y": 2,
+              "rot": [
+                [0, 0, "linear"],
+                [0.25, -2, "inOut"],
+                [0.5, 0, "inOut"],
+                [0.75, -2, "inOut"],
+                [1, 0]
+              ]
+            },
+            {
+              "id": "beakNostril",
+              "type": "circle",
+              "r": 1.2,
+              "fill": "ink",
+              "x": 22,
+              "y": 0
+            },
+            {
+              "id": "eyeBase",
+              "type": "circle",
+              "r": 8.5,
+              "fill": "light",
+              "x": 10,
+              "y": -7,
+              "sy": [
+                [0, 1, "linear"],
+                [0.45, 1, "linear"],
+                [0.48, 0.1, "out"],
+                [0.51, 1, "out"],
+                [1, 1]
+              ]
+            },
+            {
+              "id": "eyePupil",
+              "type": "circle",
+              "r": 4.8,
+              "fill": "ink",
+              "x": 12,
+              "y": -7,
+              "sy": [
+                [0, 1, "linear"],
+                [0.45, 1, "linear"],
+                [0.48, 0.1, "out"],
+                [0.51, 1, "out"],
+                [1, 1]
+              ],
+              "children": [
+                {
+                  "type": "circle",
+                  "r": 1.6,
+                  "fill": "light",
+                  "x": -1.4,
+                  "y": -1.4
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "wing",
+          "type": "ellipse",
+          "rx": 26,
+          "ry": 16,
+          "fill": "#FFB800",
+          "x": -8,
+          "y": 8,
+          "delay": 0.04,
+          "rot": [
+            [0, 4, "inOut"],
+            [0.25, -20, "inOut"],
+            [0.5, 8, "inOut"],
+            [0.75, -20, "inOut"],
+            [1, 4]
+          ],
+          "sx": [
+            [0, 1, "inOut"],
+            [0.25, 1.15, "inOut"],
+            [0.5, 0.95, "inOut"],
+            [0.75, 1.15, "inOut"],
+            [1, 1]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "frontWaveLeft",
+      "type": "curve",
+      "points": [-65, 68, -40, 64, -15, 68, 10, 64, 35, 68, 60, 64],
+      "fill": null,
+      "stroke": "light",
+      "w": 3.5,
+      "x": [
+        [0, 8, "linear"],
+        [0.5, -8, "linear"],
+        [1, 8]
+      ],
+      "y": [
+        [0, 0, "inOut"],
+        [0.25, 2, "inOut"],
+        [0.5, -1, "inOut"],
+        [0.75, 2, "inOut"],
+        [1, 0]
+      ],
+      "opacity": 0.75
+    },
+    {
+      "id": "bowWave",
+      "type": "curve",
+      "points": [32, 60, 52, 66, 75, 63],
+      "fill": null,
+      "stroke": "light",
+      "w": 3,
+      "x": [
+        [0, -10, "inOut"],
+        [0.25, 12, "inOut"],
+        [0.5, -6, "inOut"],
+        [0.75, 12, "inOut"],
+        [1, -10]
+      ],
+      "alpha": [
+        [0, 0.4, "inOut"],
+        [0.25, 0.9, "inOut"],
+        [0.5, 0.3, "inOut"],
+        [0.75, 0.9, "inOut"],
+        [1, 0.4]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>新中國77週年大事記 · 30秒快閃</title>
+<style>
+:root{--y:#FFDE00;--p:#FF66CC;--k:#000000;--w:#FFFFFF;--r:#FF0000;--b:#0055FF;--g:#00A651;--lw:6.2px;
+ --f:"Noto Sans TC","Noto Sans CJK TC","PingFang TC","PingFang HK","Microsoft JhengHei","Heiti TC","Hiragino Sans CNS",system-ui,sans-serif}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--y);overflow:hidden;font-family:var(--f);color:var(--k);-webkit-tap-highlight-color:transparent}
+#stage{position:fixed;inset:0;display:block;touch-action:manipulation}
+#hud{position:fixed;left:0;right:0;top:0;display:flex;flex-direction:column;align-items:flex-end;gap:12px;pointer-events:none;
+ padding:calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 14px) 0 calc(env(safe-area-inset-left) + 10px)}
+.bar{width:100%;height:22px;border:var(--lw) solid var(--k);background:var(--w);box-shadow:4px 4px 0 var(--k);overflow:hidden}
+.fill{height:100%;width:0;background:radial-gradient(var(--k) 1.6px,transparent 2.1px) 0 0/8px 8px,var(--r);border-right:var(--lw) solid var(--k)}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.btn{pointer-events:auto;font:900 16px/1 var(--f);min-height:46px;min-width:46px;padding:0 15px;color:var(--k);background:var(--w);
+ border:var(--lw) solid var(--k);border-radius:10px;box-shadow:4px 4px 0 var(--k);cursor:pointer;
+ transition:transform .16s cubic-bezier(.227,1.1,.483,.99),box-shadow .16s cubic-bezier(.227,1.1,.483,.99)}
+.btn:hover{transform:translate(-1px,-2px) rotate(-1.5deg)}
+.btn:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--k)}
+.btn[aria-pressed="true"]{background:var(--b);color:var(--w)}
+.btn:focus-visible{outline:4px solid var(--b);outline-offset:3px}
+.hint{pointer-events:none;font:900 16px/1 var(--f);padding:10px 14px;background:var(--r);color:var(--k);border:var(--lw) solid var(--k);border-radius:10px;box-shadow:4px 4px 0 var(--k);transform:rotate(2deg)}
+#src{position:fixed;inset:0;display:grid;place-items:center;background:var(--p);padding:16px}
+#src::before{content:"";position:absolute;inset:0;background:radial-gradient(var(--w) 3px,transparent 3.6px) 0 0/26px 26px;opacity:1;z-index:0}
+.sheet{position:relative;z-index:1;width:min(94vw,740px);max-height:88vh;overflow:auto;background:var(--w);border:var(--lw) solid var(--k);box-shadow:8px 8px 0 var(--k);padding:20px 22px;border-radius:12px}
+.sheet h2{margin:0 0 10px;font:900 28px/1.2 var(--f)}
+.sheet ul{margin:0 0 14px;padding-left:1.2em}
+.sheet li{margin:9px 0;line-height:1.55;font-weight:700;font-size:16px}
+.sheet a{color:var(--b);word-break:break-all;font-weight:700}
+.sheet .note{font-size:15px;line-height:1.6;font-weight:700;margin:0 0 16px;padding:10px 12px;border:var(--lw) solid var(--k);background:var(--y)}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+@media (prefers-reduced-motion:reduce){.btn{transition:none}.btn:hover{transform:none}}
+</style>
+</head>
+<body>
+<canvas id="stage" role="img" aria-label="新中國成立77週年大事記，30秒動畫。事件文字版在頁面內的隱藏清單中。"></canvas>
+<header id="hud">
+  <div class="bar" role="progressbar" aria-label="播放進度" aria-valuemin="0" aria-valuemax="100"><div class="fill" id="barFill"></div></div>
+  <div class="row">
+    <button id="btnSound" class="btn" type="button" aria-pressed="false">聲音：關</button>
+    <button id="btnPlay" class="btn" type="button">暫停</button>
+    <button id="btnSrc" class="btn" type="button" aria-expanded="false" aria-controls="src">資料來源</button>
+  </div>
+  <div id="hint" class="hint" hidden>想再看一次？按「重播」</div>
+</header>
+<section id="src" hidden role="dialog" aria-modal="true" aria-labelledby="srcT">
+  <div class="sheet">
+    <h2 id="srcT">資料來源</h2>
+    <ul>
+      <li>1949 開國大典：<a href="http://cpc.people.com.cn/BIG5/64162/64165/70486/70487/4792020.html" target="_blank" rel="noopener">中國共產黨新聞網 · 開國大典資料</a></li>
+      <li>1964 首顆原子彈：<a href="http://www.sasac.gov.cn/n2588025/n2649281/n10784966/c12361408/content.html" target="_blank" rel="noopener">國務院國資委 · 1964年10月16日</a></li>
+      <li>1971 聯大第2758號決議、1978 改革開放：<a href="https://www.voachinese.com/a/prc-70th-timeline-20191001/5091972.html" target="_blank" rel="noopener">美國之音 · 中華人民共和國70年歷史大事記</a></li>
+      <li>1997 香港回歸：<a href="https://www.news.cn/politics/2021-12/08/c_1211478981.htm" target="_blank" rel="noopener">新華網 · 1997，香港回歸祖國</a>；1999 澳門回歸：<a href="https://m.thepaper.cn/baijiahao_29698156" target="_blank" rel="noopener">澎湃新聞 · 澳門回歸為何定在1999年12月20日</a></li>
+      <li>2001 加入世貿組織：<a href="http://big5.cctv.com/gate/big5/news.cctv.cn/science/20081009/109034.shtml" target="_blank" rel="noopener">央視網 · 2001年12月11日 中國正式加入世貿組織</a></li>
+      <li>2003 神舟五號、2024 嫦娥六號：<a href="https://www.qstheory.cn/2024-09/26/c_1130205233.htm" target="_blank" rel="noopener">求是網 · 中國航天：逐夢浩瀚蒼穹</a>、<a href="https://www.qstheory.cn/laigao/ycjx/2024-07/28/c_1130186043.htm" target="_blank" rel="noopener">求是網 · 中國航天事業成就輝煌</a></li>
+      <li>2008 北京奧運會：<a href="https://www.voachinese.com/a/prc-70th-timeline-20191001/5091972.html" target="_blank" rel="noopener">美國之音 · 70年歷史大事記</a>；2022 北京冬奧會：<a href="https://www.mfa.gov.cn/ziliao_674904/zt_674979/dnzt_674981/qtzt/BEIJING2022/yswj/202202/t20220221_10643982.shtml" target="_blank" rel="noopener">外交部 · 北京冬奧會閉幕報道</a></li>
+      <li>2026 「十五五」規劃綱要：<a href="https://www.news.cn/politics/leaders/20260330/a106df5fba0e4c84b73850441da64ed4/c.html" target="_blank" rel="noopener">新華網 · 「十五五」規劃綱要編制記</a></li>
+    </ul>
+    <p class="note">本動畫只列各事件的年份、日期與公開紀載的基本事實，用語力求中性簡略。更多背景請參閱以上來源。</p>
+    <button id="srcClose" class="btn" type="button">關閉</button>
+  </div>
+</section>
+<ol id="events" class="sr" aria-label="大事記文字版"></ol>
+<script>
+(function (g) {
+'use strict';
+/* ===== a_core.js — 色板、數學、緩動、動作狀態、版面 ===== */
+const C = {Y:'#FFDE00', P:'#FF66CC', K:'#000000', W:'#FFFFFF', R:'#FF0000', B:'#0055FF', G:'#00A651'};
+const PI = Math.PI, TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => x < a ? a : (x > b ? b : x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const sstep = t => { t = clamp(t); return t * t * (3 - 2 * t); };
+const quintOut = t => 1 - Math.pow(1 - clamp(t), 5);
+const quintIn = t => Math.pow(clamp(t), 5);
+const quintInOut = t => { t = clamp(t); return t < .5 ? 16 * Math.pow(t, 5) : 1 - Math.pow(-2 * t + 2, 5) / 2; };
+
+/* 主緩動：cubic-bezier(0.227, 1.1, 0.483, 0.99)，含 12% 過衝回彈 */
+function bezier(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = t => ((ax * t + bx) * t + cx) * t;
+  const sy = t => ((ay * t + by) * t + cy) * t;
+  const dx = t => (3 * ax * t + 2 * bx) * t + cx;
+  return x => {
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 6; i++) {
+      const e = sx(t) - x; if (Math.abs(e) < 1e-5) break;
+      const d = dx(t); if (Math.abs(d) < 1e-6) break; t -= e / d;
+    }
+    if (!(t >= 0 && t <= 1)) { let lo = 0, hi = 1; t = x; for (let i = 0; i < 22; i++) { if (sx(t) < x) lo = t; else hi = t; t = (lo + hi) / 2; } }
+    return sy(t);
+  };
+}
+const EASE = bezier(.227, 1.1, .483, .99);
+
+/* 動作參數（越高越明顯） */
+const MP = {sq: .30, ant: .25, over: .12, follow: .40, stagger: 52, act: 323, orbit: .24, crane: .95};
+
+/* 子彈時間：快—慢—快的速度曲線（平滑進出），回傳累積進度表 */
+function buildRamp(a, b, slow) {
+  const N = 240, tab = new Float32Array(N + 1); let acc = 0;
+  for (let i = 1; i <= N; i++) {
+    const u = (i - .5) / N;
+    const w = sstep((u - (a - .09)) / .12) * (1 - sstep((u - (b - .03)) / .12));
+    acc += lerp(1, slow, w) / N; tab[i] = acc;
+  }
+  for (let i = 0; i <= N; i++) tab[i] /= acc;
+  return {tab, N, a, b, slow};
+}
+function remap(r, u) { u = clamp(u); const f = u * r.N, i = Math.floor(f); if (i >= r.N) return 1; return lerp(r.tab[i], r.tab[i + 1], f - i); }
+function slowW(r, u) { return sstep((u - (r.a - .09)) / .12) * (1 - sstep((u - (r.b - .03)) / .12)); }
+const RAMP_EVT = buildRamp(.25, .72, .14);
+const RAMP_CODA = buildRamp(.22, .70, .10);
+
+/* 進場動作：預備動作 → 主緩動（含過衝）→ 擠壓拉伸 → 回彈。
+   from = {dx,dy,rot,s}；回傳 null 表示尚未出現 */
+function popState(tr, start, dur, from, axis) {
+  if (ST.reduce) return tr >= start ? {e: 1, sx: 1, sy: 1, s: 1, dx: 0, dy: 0, rot: 0} : null;
+  const x = (tr - start) / (dur || MP.act);
+  if (x <= 0) return null;
+  const ANT = .2; let e, sx = 1, sy = 1;
+  from = from || {};
+  if (x < ANT) {
+    const q = Math.sin(x / ANT * PI / 2);
+    e = -MP.ant * .12 * q; sy = 1 - MP.ant * .30 * q; sx = 1 + MP.ant * .18 * q;
+  } else {
+    const m = clamp((x - ANT) / (1 - ANT));
+    e = EASE(m);
+    const v = (EASE(clamp(m + .03)) - EASE(clamp(m - .03))) / .06;
+    const st = MP.sq * clamp(v / 3.4) * (1 - m * .4);
+    const land = m > .5 ? Math.sin(clamp((m - .5) / .5) * PI) * MP.sq * .55 * (1 - m * .3) : 0;
+    if (axis === 'x') { sx = 1 + st - land * .8; sy = 1 / sx; }
+    else { sy = 1 + st - land; sx = 1 / Math.max(.4, 1 + st * .7 - land * .6); }
+  }
+  const s0 = from.s == null ? 1 : from.s;
+  return {
+    e, sx, sy,
+    s: Math.max(0, lerp(s0, 1, e)),
+    dx: (from.dx || 0) * (1 - e), dy: (from.dy || 0) * (1 - e),
+    rot: (from.rot || 0) * (1 - e)
+  };
+}
+/* 退場：先微微放大（預備）再縮小 */
+function exitState(tr, D, i) {
+  if (ST.reduce || D > 1e8) return {s: 1, dy: 0, a: 1};
+  const st = D - 427 + i * MP.stagger, x = clamp((tr - st) / 270);
+  if (x <= 0) return {s: 1, dy: 0, a: 1};
+  const s = x < .25 ? 1 + .10 * (x / .25) : lerp(1.1, 0, quintIn((x - .25) / .75));
+  return {s, dy: -70 * quintIn(x), a: x >= 1 ? 0 : 1};
+}
+
+/* ----- 版面（邏輯單位：短邊 = 1000）----- */
+function layoutFor(Wl, Hl) {
+  const land = Wl > Hl * 1.12, L = {Wl, Hl, land};
+  if (land) {
+    const cw = Math.min(Wl, Hl * 1.9), ox = (Wl - cw) / 2; L.ox = ox; L.cw = cw;
+    L.year = {x: ox + cw * .05, y: Hl * .27, maxW: cw * .44, size: Hl * .34, align: 'left'};
+    L.tag = {x: ox + cw * .05, y: Hl * .44};
+    L.card = {x: ox + cw * .05, y: Hl * .50, w: cw * .46, size: Math.min(Hl * .054, cw * .034), align: 'left'};
+    L.hero = {x: ox + cw * .75, y: Hl * .535, R: Math.min(Hl * .29, cw * .185)};
+  } else {
+    L.ox = 0; L.cw = Wl;
+    L.year = {x: Wl / 2, y: Hl * .2, maxW: Wl * .92, size: Math.min(Hl * .15, Wl * .31), align: 'center'};
+    L.tag = {x: Wl * .06, y: Hl * .685};
+    L.card = {x: Wl * .06, y: Hl * .72, w: Wl * .88, size: Math.min(Wl * .06, Hl * .042), align: 'left'};
+    L.hero = {x: Wl / 2, y: Hl * .475, R: Math.min(Wl * .385, Hl * .185)};
+  }
+  return L;
+}
+
+/* ----- 文字 ----- */
+const FAM = '"Noto Sans TC","Noto Sans CJK TC","PingFang TC","PingFang HK","Microsoft JhengHei","Heiti TC","Hiragino Sans CNS","Source Han Sans TC",system-ui,sans-serif';
+function setFont(ctx, size, w) { ctx.font = (w || 900) + ' ' + Math.round(size) + 'px ' + FAM; }
+const NOSTART = '，。、．：；！？」』）》〉,.:;!?)·';
+function wrapText(ctx, str, maxW) {
+  const lines = []; let cur = '';
+  for (const ch of str) {
+    const t = cur + ch;
+    if (cur && ctx.measureText(t).width > maxW && NOSTART.indexOf(ch) < 0) { lines.push(cur); cur = ch; } else cur = t;
+  }
+  if (cur) lines.push(cur);
+  if (lines.length < 2) return lines;
+  /* 平均分行，避免孤字；盡量在標點後換行 */
+  const chars = [...str], n = lines.length, target = Math.ceil(chars.length / n), out = [];
+  let pos = 0;
+  for (let i = 0; i < n - 1; i++) {
+    let cut = pos + target;
+    for (let d = 0; d <= 2; d++) {
+      if ('，、：；'.indexOf(chars[cut - 1 - d]) >= 0 && cut - d > pos + 2) { cut -= d; break; }
+      if ('，、：；'.indexOf(chars[cut - 1 + d]) >= 0 && cut + d < chars.length) { cut += d; break; }
+    }
+    out.push(chars.slice(pos, cut).join('')); pos = cut;
+  }
+  out.push(chars.slice(pos).join(''));
+  return out.every(l => ctx.measureText(l).width <= maxW) ? out : lines;
+}
+const onColor = c => c === C.B || c === C.K ? C.W : C.K;
+
+/* ===== b_draw.js — 繪圖輔助、背景、前景、年份、說明卡、轉場條 ===== */
+const ST = {lw: 6.2, reduce: false};
+const DOC = typeof document !== 'undefined' ? document : null;
+
+function ink(ctx, fill, lw) {
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = lw || ST.lw;
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  ctx.strokeStyle = C.K; ctx.stroke();
+}
+function circ(ctx, x, y, r) { r = Math.max(0, r); ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, TAU); }
+function rr(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function starPts(cx, cy, ro, ri, n, rot) {
+  const pts = [];
+  for (let i = 0; i < n * 2; i++) { const r = i % 2 ? ri : ro, a = rot + i * PI / n; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return pts;
+}
+function polyPath(ctx, pts) { ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); }
+function fillStroke(ctx, fn, fill, lw) { ctx.beginPath(); fn(ctx); ink(ctx, fill, lw); }
+
+/* 網點圖樣（暗部用網點，不用平滑漸層）*/
+const patCache = {};
+function dotPat(ctx, color, step, rad) {
+  const key = color + step + '_' + rad; if (patCache[key]) return patCache[key];
+  const S = 4, cv = DOC.createElement('canvas'); cv.width = cv.height = Math.ceil(step * S);
+  const c = cv.getContext('2d'); c.fillStyle = color;
+  const d = (x, y) => { c.beginPath(); c.arc(x * S, y * S, rad * S, 0, TAU); c.fill(); };
+  d(0, 0); d(step, 0); d(0, step); d(step, step); d(step / 2, step / 2);
+  const pat = ctx.createPattern(cv, 'repeat');
+  try { pat.setTransform(new DOMMatrix().scale(1 / S)); } catch (e) {}
+  return (patCache[key] = pat);
+}
+/* 在 shapeFn 形狀內，沿 (dx,dy) 反方向的月牙區填網點 */
+function shade(ctx, shapeFn, dx, dy, pat) {
+  ctx.save();
+  ctx.beginPath(); shapeFn(ctx); ctx.clip();
+  ctx.beginPath(); ctx.rect(-3000, -3000, 6000, 6000);
+  ctx.save(); ctx.translate(dx, dy); shapeFn(ctx); ctx.restore();
+  ctx.fillStyle = pat; ctx.fill('evenodd');
+  ctx.restore();
+}
+
+/* ----- 背景：背景色 + 背景2 放射線 + Ben-Day 網點（隨對角線變大）----- */
+function drawBG(ctx, L, sc, cam, p) {
+  const Wl = L.Wl, Hl = L.Hl;
+  ctx.fillStyle = sc.bg; ctx.fillRect(0, 0, Wl, Hl);
+  const hx = L.hero.x + cam.dx * .8, hy = L.hero.y + cam.dy * .8;
+  const n = 14, rot = (ST.reduce ? .2 : p * .9) + (sc.idx || 0) * .31, rad = Math.hypot(Wl, Hl);
+  ctx.fillStyle = sc.bg2;
+  for (let i = 0; i < n; i += 2) {
+    const a0 = rot + i * TAU / n, a1 = a0 + TAU / n;
+    ctx.beginPath(); ctx.moveTo(hx, hy);
+    ctx.lineTo(hx + Math.cos(a0) * rad, hy + Math.sin(a0) * rad);
+    ctx.lineTo(hx + Math.cos(a1) * rad, hy + Math.sin(a1) * rad);
+    ctx.closePath(); ctx.fill();
+  }
+  const step = 34, ox = (cam.dx * .25) % step, oy = (cam.dy * .35) % (step);
+  ctx.fillStyle = sc.dot; ctx.beginPath();
+  for (let row = -2; row * step * .5 < Hl + step; row++) {
+    const y = row * step * .5 + oy, off = (row & 1) ? step / 2 : 0;
+    for (let x = -step + off + ox; x < Wl + step; x += step) {
+      const g = clamp((x / Wl) * .3 + (y / Hl) * .7);
+      const r = step * (.05 + .30 * g * g);
+      ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, TAU);
+    }
+  }
+  ctx.fill();
+}
+
+/* ----- 前景：視差最強的彩紙（星、圓、十字）----- */
+function drawFG(ctx, L, sc, cam, p, tr) {
+  const cols = [C.R, C.B, C.W, C.G, C.Y, C.P].filter(c => c !== sc.bg && c !== sc.bg2);
+  const seed = (sc.idx || 0) * 17 + 3;
+  const rnd = i => { const s = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return s - Math.floor(s); };
+  for (let i = 0; i < 12; i++) {
+    const pp = popState(tr, 260 + i * MP.stagger, MP.act, {s: 0}); if (!pp) continue;
+    const u = rnd(i), v = rnd(i + 40), sz = 26 + rnd(i + 80) * 30, kind = i % 3;
+    const drift = ST.reduce ? 0 : p * 120 * (.4 + u);
+    let x = u * L.Wl + cam.dx * 1.2 + (ST.reduce ? 0 : Math.sin(p * 5 + i) * 26);
+    let y = ((v * L.Hl + cam.dy * 1.5 + drift) % (L.Hl + 120) + L.Hl + 120) % (L.Hl + 120) - 60;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rnd(i + 9) * TAU + (ST.reduce ? 0 : p * 1.5)); ctx.scale(pp.s * pp.sx, pp.s * pp.sy);
+    ctx.beginPath();
+    if (kind === 0) polyPath(ctx, starPts(0, 0, sz, sz * .45, 5, -PI / 2));
+    else if (kind === 1) circ(ctx, 0, 0, sz * .6);
+    else { const a = sz * .85, b = sz * .28; ctx.moveTo(-a, -b); ctx.lineTo(-b, -b); ctx.lineTo(-b, -a); ctx.lineTo(b, -a); ctx.lineTo(b, -b); ctx.lineTo(a, -b); ctx.lineTo(a, b); ctx.lineTo(b, b); ctx.lineTo(b, a); ctx.lineTo(-b, a); ctx.lineTo(-b, b); ctx.lineTo(-a, b); ctx.closePath(); }
+    ink(ctx, cols[i % cols.length], ST.lw * .5);
+    ctx.restore();
+  }
+}
+
+/* ----- 年份：逐字從上方砸下（預備→拉伸→落地擠壓→回彈），網點陰影 ----- */
+function drawYear(ctx, L, sc, tr, D, p, sw) {
+  const Y = sc.yBox || L.year, str = sc.year;
+  let size = Y.size; setFont(ctx, size);
+  let w = ctx.measureText(str).width;
+  if (w > Y.maxW) { size *= Y.maxW / w; setFont(ctx, size); }
+  const chars = [...str], ws = chars.map(ch => ctx.measureText(ch).width), total = ws.reduce((a, b) => a + b, 0);
+  const x0 = Y.align === 'left' ? Y.x : Y.x - total / 2;
+  const ex = exitState(tr, D, 2); if (ex.a === 0) return;
+  const pat = dotPat(ctx, C.K, 12, 2.7), cols = sc.yc || [C.R];
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  let acc = 0;
+  for (let i = 0; i < chars.length; i++) {
+    const cx = x0 + acc + ws[i] / 2; acc += ws[i];
+    const pp = popState(tr, 30 + i * MP.stagger, MP.act, {dy: -size * 1.35}, 'y'); if (!pp) continue;
+    const settle = ST.reduce ? 0 : Math.sin(tr / 150 - i * 1.1) * .035 * MP.follow * Math.exp(-tr / 1100);
+    const slowShake = ST.reduce ? 0 : Math.sin(p * 60 - i) * .012 * sw;
+    ctx.save();
+    ctx.translate(cx + pp.dx, Y.y + pp.dy + ex.dy);
+    ctx.rotate(settle + slowShake);
+    ctx.translate(0, size * .38); ctx.scale(pp.sx * pp.s * ex.s, pp.sy * pp.s * ex.s); ctx.translate(0, -size * .38);
+    const off = size * .05;
+    ctx.fillStyle = pat; ctx.fillText(chars[i], off, off);
+    ctx.lineWidth = ST.lw * 2.5; ctx.strokeStyle = C.K; ctx.strokeText(chars[i], 0, 0);
+    ctx.fillStyle = cols[i % cols.length]; ctx.fillText(chars[i], 0, 0);
+    ctx.restore();
+  }
+}
+
+/* ----- 說明卡：白底、黑粗框、硬陰影、底部網點條；標籤章跟隨重疊 ----- */
+function drawCard(ctx, L, sc, tr, D) {
+  const c = L.card, pad = c.size * .62;
+  setFont(ctx, c.size); const inner = c.w - pad * 2;
+  const lines = wrapText(ctx, sc.cap, inner);
+  const ss = c.size * .66; setFont(ctx, ss, 700);
+  const slines = sc.sub ? wrapText(ctx, sc.sub, inner) : [];
+  const lh = c.size * 1.3, sh = ss * 1.4;
+  const h = pad + lines.length * lh + (slines.length ? c.size * .22 + slines.length * sh : 0) + pad * 1.35;
+  let y = c.y; if (!L.land) y = Math.min(y, L.Hl * .96 - h); else y = Math.min(y, L.Hl * .96 - h);
+  const ex = exitState(tr, D, 0); if (ex.a === 0) return;
+  const pp = popState(tr, 250, MP.act, {dy: 170, rot: .05}, 'y'); if (!pp) return;
+  const cx = c.x + c.w / 2, cy = y + h / 2;
+  ctx.save();
+  ctx.translate(cx + pp.dx, cy + pp.dy + ex.dy); ctx.rotate(pp.rot);
+  ctx.scale(pp.sx * pp.s * ex.s, pp.sy * pp.s * ex.s); ctx.translate(-c.w / 2, -h / 2);
+  const so = ST.lw * 2.1;
+  ctx.beginPath(); rr(ctx, so, so, c.w, h, 12); ctx.fillStyle = C.K; ctx.fill();
+  ctx.beginPath(); rr(ctx, 0, 0, c.w, h, 12); ink(ctx, C.W);
+  ctx.save(); ctx.beginPath(); rr(ctx, 0, 0, c.w, h, 12); ctx.clip();
+  ctx.fillStyle = dotPat(ctx, sc.accent, 12, 3.2); ctx.fillRect(0, h - pad * 1.0, c.w, pad * 1.0);
+  ctx.restore();
+  ctx.beginPath(); rr(ctx, 0, 0, c.w, h, 12); ctx.stroke();
+  ctx.fillStyle = C.K; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  setFont(ctx, c.size);
+  lines.forEach((ln, i) => {
+    const lp = popState(tr, 330 + i * MP.stagger, MP.act, {dy: 24}); if (!lp) return;
+    ctx.save(); ctx.translate(0, lp.dy); ctx.fillText(ln, pad, pad + c.size * 1 + i * lh); ctx.restore();
+  });
+  if (slines.length) {
+    setFont(ctx, ss, 700);
+    slines.forEach((ln, i) => {
+      const lp = popState(tr, 330 + (lines.length + i) * MP.stagger, MP.act, {dy: 24}); if (!lp) return;
+      ctx.save(); ctx.translate(0, lp.dy);
+      ctx.fillText(ln, pad, pad + lines.length * lh + c.size * .22 + ss * 1.05 + i * sh); ctx.restore();
+    });
+  }
+  /* 標籤章 */
+  if (sc.tag) {
+    const ts = c.size * .7; setFont(ctx, ts); const tw = ctx.measureText(sc.tag).width + ts * 1.1, th = ts * 1.55;
+    const tp = popState(tr, 250 + MP.stagger * 2, MP.act, {s: .2, rot: -.2}); if (tp) {
+      ctx.save(); ctx.translate(pad * .5 + tw / 2, -th * .42); ctx.rotate(-.05 + tp.rot); ctx.scale(tp.s * tp.sx, tp.s * tp.sy);
+      ctx.beginPath(); rr(ctx, -tw / 2 + ST.lw * 1.2, -th / 2 + ST.lw * 1.2, tw, th, 8); ctx.fillStyle = C.K; ctx.fill();
+      ctx.beginPath(); rr(ctx, -tw / 2, -th / 2, tw, th, 8); ink(ctx, sc.accent);
+      ctx.fillStyle = onColor(sc.accent); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(sc.tag, 0, ts * .04);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+/* ----- 轉場條：場景開頭掃過的斜向色帶（whoosh）----- */
+function drawWipe(ctx, L, sc, tr) {
+  const w = tr / 380; if (w <= 0 || w >= 1 || ST.reduce) return;
+  const e = quintInOut(w), Wl = L.Wl, Hl = L.Hl, sk = Hl * .35, bw = Wl * .6;
+  const xc = lerp(-bw, Wl + bw + sk, e);
+  const band = (x, wd, col) => {
+    ctx.beginPath(); ctx.moveTo(x - wd, Hl); ctx.lineTo(x - wd + sk, 0); ctx.lineTo(x + sk, 0); ctx.lineTo(x, Hl); ctx.closePath();
+    ctx.fillStyle = col; ctx.fill();
+  };
+  band(xc, bw * .55, sc.accent); band(xc - bw * .55, bw * .1, C.K); band(xc + bw * .08, bw * .08, C.W);
+}
+
+/* ===== c1_heroes.js — 事件插圖（上）：國旗、原子、席位、齒輪、港澳 ===== */
+/* 英雄圖局部座標：中心 (0,0)，半徑約 300；a = {tr,p,k,sw,T,lw,u} */
+function part(ctx, a, i, ox, oy, fn, from) {
+  const pp = popState(a.tr, 110 + i * MP.stagger, MP.act, from || {s: .15, dy: 70}); if (!pp) return;
+  ctx.save(); ctx.translate(ox + pp.dx, oy + pp.dy); ctx.rotate(pp.rot); ctx.scale(pp.s * pp.sx, pp.s * pp.sy);
+  fn(); ctx.restore();
+}
+function ell(ctx, rx, ry, rot) { ctx.moveTo(rx, 0); ctx.ellipse(0, 0, Math.max(0, rx), Math.max(0, ry), rot || 0, 0, TAU); }
+
+function heroFlag(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6);
+  part(ctx, a, 0, 0, 150, () => {
+    const wall = c => c.rect(-270, -10, 540, 150);
+    ctx.beginPath(); wall(ctx); ink(ctx, C.R, LW); shade(ctx, wall, -46, 0, dk);
+    for (const gx of [-150, 0, 150]) {
+      ctx.beginPath(); ctx.moveTo(gx - 38, 140); ctx.lineTo(gx - 38, 60); ctx.arc(gx, 60, 38, PI, 0); ctx.lineTo(gx + 38, 140); ctx.closePath(); ink(ctx, C.K, LW);
+    }
+    ctx.beginPath(); ctx.rect(-210, -70, 420, 60); ink(ctx, C.R, LW);
+    ctx.fillStyle = C.Y;
+    for (let i = -4; i <= 4; i++) { ctx.beginPath(); ctx.rect(i * 44 - 12, -58, 24, 34); ink(ctx, C.Y, LW * .6); }
+    ctx.beginPath(); ctx.moveTo(-250, -70); ctx.lineTo(250, -70); ctx.lineTo(205, -125); ctx.lineTo(-205, -125); ctx.closePath(); ink(ctx, C.Y, LW);
+    ctx.beginPath(); ctx.rect(-150, -175, 300, 50); ink(ctx, C.R, LW);
+    ctx.beginPath(); ctx.moveTo(-200, -175); ctx.lineTo(200, -175); ctx.lineTo(150, -232); ctx.lineTo(-150, -232); ctx.closePath(); ink(ctx, C.Y, LW);
+    const roof = c => { c.moveTo(-250, -70); c.lineTo(250, -70); c.lineTo(205, -125); c.lineTo(-205, -125); c.closePath(); };
+    shade(ctx, roof, 0, -26, dk);
+  }, {s: .3, dy: 120});
+  /* 旗桿與升起的五星紅旗（升旗速度隨子彈時間放慢）*/
+  part(ctx, a, 2, -110, 0, () => {
+    ctx.beginPath(); ctx.rect(-8, -285, 16, 470); ink(ctx, C.W, LW);
+    ctx.beginPath(); circ(ctx, 0, -292, 17); ink(ctx, C.Y, LW);
+    const FW = 270, FH = 176, rise = quintOut(clamp(a.p / .88));
+    const top = lerp(120, -262, rise);
+    const wv = x => (ST.reduce ? 0 : Math.sin(x * .034 - a.T * 6.2) * 9 * (x / FW));
+    ctx.save(); ctx.translate(8, top);
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    for (let x = 0; x <= FW; x += 18) ctx.lineTo(x, wv(x));
+    for (let x = FW; x >= 0; x -= 18) ctx.lineTo(x, FH + wv(x));
+    ctx.closePath(); ink(ctx, C.R, LW);
+    const star = (cx, cy, r, rot) => { ctx.beginPath(); polyPath(ctx, starPts(cx, cy + wv(cx), r, r * .42, 5, rot)); ink(ctx, C.Y, LW * .55); };
+    star(52, 52, 32, -PI / 2);
+    star(112, 20, 11, -PI / 2 + .6); star(134, 46, 11, -PI / 2 + .3); star(134, 78, 11, -PI / 2 - .2); star(112, 104, 11, -PI / 2 - .5);
+    ctx.restore();
+  }, {s: .3, dy: 160});
+}
+
+function heroAtom(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6);
+  part(ctx, a, 0, 0, 0, () => {
+    ctx.beginPath(); polyPath(ctx, starPts(0, 0, 292, 205, 16, a.p * .5)); ink(ctx, C.Y, LW);
+    ctx.beginPath(); polyPath(ctx, starPts(0, 0, 205, 160, 16, -a.p * .4)); ink(ctx, C.R, LW);
+  }, {s: .1, dy: 0, rot: .8});
+  part(ctx, a, 1, 0, 0, () => {
+    const rots = [0, PI / 3, 2 * PI / 3];
+    rots.forEach(r => {
+      ctx.save(); ctx.rotate(r); ctx.beginPath(); ell(ctx, 215, 78, 0);
+      ctx.lineWidth = LW * 2.4; ctx.strokeStyle = C.K; ctx.stroke(); ctx.lineWidth = LW * .9; ctx.strokeStyle = C.W; ctx.stroke(); ctx.restore();
+    });
+    const ec = [C.B, C.W, C.G];
+    rots.forEach((r, i) => {
+      const th = (ST.reduce ? 1 : a.p * 9) + i * 2.1, ex = Math.cos(th) * 215, ey = Math.sin(th) * 78;
+      const x = ex * Math.cos(r) - ey * Math.sin(r), y = ex * Math.sin(r) + ey * Math.cos(r);
+      ctx.beginPath(); circ(ctx, x, y, 26); ink(ctx, ec[i], LW);
+    });
+  }, {s: .2, dy: 0, rot: -.7});
+  part(ctx, a, 2, 0, 0, () => {
+    const nuc = c => circ(c, 0, 0, 66);
+    ctx.beginPath(); nuc(ctx); ink(ctx, C.W, LW); shade(ctx, nuc, -22, -22, dk);
+    ctx.beginPath(); circ(ctx, 0, 0, 34); ink(ctx, C.R, LW);
+  }, {s: 0, dy: 0});
+}
+
+function heroSeat(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6);
+  part(ctx, a, 0, -40, 40, () => {
+    const back = c => rr(c, -118, -270, 236, 250, 26), seat = c => rr(c, -126, -30, 252, 76, 16);
+    const armL = c => rr(c, -184, -110, 62, 190, 20), armR = c => rr(c, 122, -110, 62, 190, 20);
+    ctx.beginPath(); ctx.rect(-118, 40, 38, 130); ink(ctx, C.B, LW);
+    ctx.beginPath(); ctx.rect(80, 40, 38, 130); ink(ctx, C.B, LW);
+    ctx.beginPath(); back(ctx); ink(ctx, C.B, LW); shade(ctx, back, -34, -34, dk);
+    ctx.beginPath(); rr(ctx, -80, -230, 160, 170, 14); ink(ctx, C.W, LW * .8);
+    ctx.beginPath(); armL(ctx); ink(ctx, C.R, LW); shade(ctx, armL, 22, 0, dk);
+    ctx.beginPath(); armR(ctx); ink(ctx, C.R, LW); shade(ctx, armR, -22, 0, dk);
+    ctx.beginPath(); seat(ctx); ink(ctx, C.Y, LW); shade(ctx, seat, 0, -26, dk);
+  }, {s: .5, dy: -260});
+  part(ctx, a, 2, 90, -205, () => {
+    ctx.beginPath(); ctx.moveTo(-90, 62); ctx.lineTo(-132, 130); ctx.lineTo(-34, 70); ctx.closePath(); ink(ctx, C.W, LW);
+    ctx.beginPath(); rr(ctx, -150, -70, 300, 150, 30); ink(ctx, C.W, LW);
+    ctx.beginPath(); ctx.moveTo(-86, 66); ctx.lineTo(-112, 100); ctx.lineTo(-44, 72); ctx.closePath(); ctx.fillStyle = C.W; ctx.fill();
+    ctx.fillStyle = C.B; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; setFont(ctx, 100);
+    ctx.lineWidth = LW * 1.4; ctx.strokeStyle = C.K; ctx.strokeText('2758', 0, 4); ctx.fillText('2758', 0, 4);
+  }, {s: 0, dy: 30, rot: .3});
+  part(ctx, a, 3, 150, 160, () => {
+    ctx.beginPath(); circ(ctx, 0, 0, 82); ink(ctx, C.G, LW);
+    ctx.beginPath(); ctx.moveTo(-44, 4); ctx.lineTo(-12, 38); ctx.lineTo(48, -34);
+    ctx.lineWidth = LW * 4.2; ctx.strokeStyle = C.K; ctx.stroke(); ctx.lineWidth = LW * 2; ctx.strokeStyle = C.W; ctx.stroke();
+  }, {s: 0, dy: 0, rot: -.6});
+}
+
+function heroGear(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6), rot = ST.reduce ? .2 : a.p * 2.4;
+  part(ctx, a, 0, -40, 0, () => {
+    ctx.rotate(rot);
+    const n = 12, pts = [];
+    for (let i = 0; i < n; i++) {
+      const b = i * TAU / n;
+      pts.push([Math.cos(b - .20) * 190, Math.sin(b - .20) * 190], [Math.cos(b - .11) * 238, Math.sin(b - .11) * 238],
+        [Math.cos(b + .11) * 238, Math.sin(b + .11) * 238], [Math.cos(b + .20) * 190, Math.sin(b + .20) * 190]);
+    }
+    const g = c => polyPath(c, pts);
+    ctx.beginPath(); g(ctx); ink(ctx, C.R, LW);
+    ctx.rotate(-rot); shade(ctx, c => { c.save(); c.rotate(rot); g(c); c.restore(); }, -30, -30, dk); ctx.rotate(rot);
+    ctx.beginPath(); circ(ctx, 0, 0, 135); ink(ctx, C.Y, LW);
+    ctx.beginPath(); circ(ctx, 0, 0, 58); ink(ctx, C.W, LW);
+  }, {s: .2, dy: 0, rot: -1.2});
+  part(ctx, a, 2, 40, 30, () => {
+    ctx.rotate(-.62);
+    ctx.beginPath(); ctx.moveTo(-250, -30); ctx.lineTo(120, -30); ctx.lineTo(120, -80); ctx.lineTo(262, 0); ctx.lineTo(120, 80); ctx.lineTo(120, 30); ctx.lineTo(-250, 30); ctx.closePath(); ink(ctx, C.G, LW);
+    shade(ctx, c => { c.moveTo(-250, -30); c.lineTo(120, -30); c.lineTo(120, -80); c.lineTo(262, 0); c.lineTo(120, 80); c.lineTo(120, 30); c.lineTo(-250, 30); c.closePath(); }, 0, -20, dk);
+  }, {s: .2, dx: -160, dy: 120});
+}
+
+function heroHKMO(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6);
+  const panel = (x, rot, banner, bcol, label, date, art, idx) => part(ctx, a, idx, x, 0, () => {
+    ctx.rotate(rot);
+    const so = LW * 1.8; ctx.beginPath(); rr(ctx, -125 + so, -170 + so, 250, 340, 12); ctx.fillStyle = C.K; ctx.fill();
+    ctx.beginPath(); rr(ctx, -125, -170, 250, 340, 12); ink(ctx, C.W, LW);
+    ctx.save(); ctx.beginPath(); rr(ctx, -125, -170, 250, 340, 12); ctx.clip();
+    ctx.fillStyle = bcol; ctx.fillRect(-130, -175, 260, 84);
+    ctx.fillStyle = C.Y; ctx.fillRect(-130, 118, 260, 56);
+    art(); ctx.restore();
+    ctx.beginPath(); rr(ctx, -125, -170, 250, 340, 12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-125, -86); ctx.lineTo(125, -86); ctx.moveTo(-125, 118); ctx.lineTo(125, 118); ctx.stroke();
+    ctx.fillStyle = onColor(bcol); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; setFont(ctx, 60); ctx.fillText(label, 0, -130);
+    ctx.fillStyle = C.K; setFont(ctx, 30); ctx.fillText(date, 0, 147);
+  }, {s: .2, dy: -200, rot: idx ? .5 : -.5});
+  panel(-142, -.07, '', C.B, '香港', '1997.7.1', () => {
+    const hs = [150, 110, 190, 130, 160, 100];
+    hs.forEach((h, i) => {
+      const x = -115 + i * 40; ctx.beginPath(); ctx.rect(x, 118 - h, 36, h); ink(ctx, i % 2 ? C.R : C.B, LW * .8);
+      ctx.fillStyle = C.W; for (let r = 0; r < h / 30 - 1; r++) { ctx.fillRect(x + 6, 118 - h + 12 + r * 28, 8, 12); ctx.fillRect(x + 22, 118 - h + 12 + r * 28, 8, 12); }
+    });
+  }, 0);
+  panel(142, .07, '', C.R, '澳門', '1999.12.20', () => {
+    ctx.beginPath(); ctx.rect(-12, -10, 24, 128); ink(ctx, C.B, LW * .8);
+    ctx.beginPath(); ctx.ellipse(0, -18, 56, 20, 0, 0, TAU); ink(ctx, C.W, LW * .8);
+    ctx.beginPath(); ctx.rect(-6, -62, 12, 44); ink(ctx, C.B, LW * .8);
+    ctx.beginPath(); ctx.moveTo(-100, 118); ctx.quadraticCurveTo(-60, 40, -10, 118); ctx.closePath(); ink(ctx, C.G, LW * .8);
+    ctx.beginPath(); ctx.moveTo(20, 118); ctx.quadraticCurveTo(70, 50, 120, 118); ctx.closePath(); ink(ctx, C.G, LW * .8);
+  }, 1);
+}
+
+/* ===== c2_heroes.js — 事件插圖（下）：地球、火箭、體育場、雪花、月球、規劃書、徽章 ===== */
+function arcArrow(ctx, r, a0, a1, wd, col, LW) {
+  ctx.beginPath(); ctx.arc(0, 0, r, a0, a1);
+  ctx.lineCap = 'butt'; ctx.lineWidth = wd + LW * 2; ctx.strokeStyle = C.K; ctx.stroke();
+  ctx.lineWidth = wd; ctx.strokeStyle = col; ctx.stroke();
+  const ex = Math.cos(a1) * r, ey = Math.sin(a1) * r, tx = -Math.sin(a1), ty = Math.cos(a1), nx = Math.cos(a1), ny = Math.sin(a1);
+  ctx.beginPath(); ctx.moveTo(ex + nx * wd, ey + ny * wd); ctx.lineTo(ex + tx * wd * 1.5, ey + ty * wd * 1.5); ctx.lineTo(ex - nx * wd, ey - ny * wd); ctx.closePath(); ink(ctx, col, LW);
+}
+
+function heroGlobe(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6), R0 = 232;
+  part(ctx, a, 0, 0, -20, () => {
+    const disc = c => circ(c, 0, 0, R0);
+    ctx.beginPath(); disc(ctx); ink(ctx, C.B, LW);
+    ctx.save(); ctx.beginPath(); disc(ctx); ctx.clip();
+    ctx.fillStyle = C.G;
+    for (let i = 0; i < 4; i++) {
+      const x = ((i * 150 + (ST.reduce ? 40 : a.p * 330)) % 600) - 300, y = Math.sin(i * 2.3) * 120;
+      ctx.beginPath(); circ(ctx, x, y, 62 + i * 8); circ(ctx, x + 50, y + 34, 40); ink(ctx, C.G, LW * .8);
+    }
+    ctx.strokeStyle = C.W; ctx.lineWidth = LW * .8;
+    for (let i = 0; i < 6; i++) { const th = (ST.reduce ? .4 : a.p * 1.6) + i * PI / 6; ctx.beginPath(); ctx.ellipse(0, 0, Math.abs(Math.cos(th)) * R0, R0, 0, 0, TAU); ctx.stroke(); }
+    for (const y of [-130, -50, 50, 130]) { ctx.beginPath(); ctx.moveTo(-R0, y); ctx.lineTo(R0, y); ctx.stroke(); }
+    ctx.restore();
+    shade(ctx, disc, -58, -58, dk);
+    ctx.beginPath(); disc(ctx); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke();
+  }, {s: .2, dy: 0, rot: -.8});
+  part(ctx, a, 2, 0, -20, () => {
+    ctx.rotate(ST.reduce ? 0 : a.p * 1.3);
+    arcArrow(ctx, 272, PI * 1.05, PI * 1.85, 30, C.R, LW);
+    arcArrow(ctx, 272, PI * 0.05, PI * 0.85, 30, C.Y, LW);
+  }, {s: .3, dy: 0, rot: 1.2});
+  part(ctx, a, 3, 0, 130, () => {
+    ctx.rotate(-.12);
+    ctx.beginPath(); rr(ctx, -222 + LW * 1.6, -52 + LW * 1.6, 444, 104, 10); ctx.fillStyle = C.K; ctx.fill();
+    ctx.beginPath(); rr(ctx, -222, -52, 444, 104, 10); ink(ctx, C.W, LW);
+    ctx.fillStyle = C.K; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; setFont(ctx, 96); ctx.fillText('WTO', 0, 6);
+  }, {s: .2, dx: 160, dy: 40, rot: .4});
+}
+
+function heroRocket(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6), up = quintOut(clamp(a.p / .9));
+  part(ctx, a, 0, 0, 160, () => {
+    for (const [x, y, r] of [[-130, 0, 62], [-50, 22, 74], [50, 18, 70], [130, 2, 60], [0, 44, 66]]) {
+      ctx.beginPath(); circ(ctx, x, y + Math.sin(a.T * 3 + x) * (ST.reduce ? 0 : 4), r * (1 - up * .0)); ink(ctx, C.W, LW);
+    }
+  }, {s: 0, dy: 0});
+  part(ctx, a, 1, 0, lerp(70, -60, up), () => {
+    const fl = ST.reduce ? 0 : Math.sin(a.T * 45) * 14;
+    ctx.beginPath(); ctx.moveTo(-46, 84); ctx.quadraticCurveTo(-30, 190 + fl, 0, 270 + fl); ctx.quadraticCurveTo(30, 190 + fl, 46, 84); ctx.closePath(); ink(ctx, C.Y, LW);
+    ctx.beginPath(); ctx.moveTo(-24, 84); ctx.quadraticCurveTo(-14, 150, 0, 196 + fl); ctx.quadraticCurveTo(14, 150, 24, 84); ctx.closePath(); ink(ctx, C.R, LW);
+    ctx.beginPath(); ctx.moveTo(-62, 20); ctx.lineTo(-132, 130); ctx.lineTo(-62, 98); ctx.closePath(); ink(ctx, C.R, LW);
+    ctx.beginPath(); ctx.moveTo(62, 20); ctx.lineTo(132, 130); ctx.lineTo(62, 98); ctx.closePath(); ink(ctx, C.R, LW);
+    const body = c => { c.moveTo(-64, 96); c.lineTo(-64, -80); c.quadraticCurveTo(-64, -190, 0, -270); c.quadraticCurveTo(64, -190, 64, -80); c.lineTo(64, 96); c.closePath(); };
+    ctx.beginPath(); body(ctx); ink(ctx, C.W, LW);
+    ctx.save(); ctx.beginPath(); body(ctx); ctx.clip(); ctx.fillStyle = C.R; ctx.fillRect(-80, -290, 160, 148); ctx.fillStyle = C.B; ctx.fillRect(-80, 52, 160, 52);
+    ctx.beginPath(); ctx.moveTo(-80, -142); ctx.lineTo(80, -142); ctx.moveTo(-80, 52); ctx.lineTo(80, 52); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke(); ctx.restore();
+    shade(ctx, body, -34, 0, dk);
+    ctx.beginPath(); body(ctx); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke();
+    ctx.beginPath(); circ(ctx, 0, -50, 34); ink(ctx, C.B, LW); ctx.beginPath(); circ(ctx, -9, -60, 9); ctx.fillStyle = C.W; ctx.fill();
+  }, {s: .4, dy: 130});
+  for (let i = 0; i < 6; i++) part(ctx, a, 3 + i, [-250, 240, -210, 225, 20, -90][i], [-190, -120, 60, 120, -285, -255][i], () => {
+    ctx.rotate(ST.reduce ? 0 : a.p * 2 + i); ctx.beginPath(); polyPath(ctx, starPts(0, 0, 24 - i, 10, 4, 0)); ink(ctx, i % 2 ? C.Y : C.W, LW * .7);
+  }, {s: 0, dy: 0, rot: 1});
+}
+
+function heroStadium(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6);
+  part(ctx, a, 0, 0, 150, () => {
+    const outer = c => { c.moveTo(300, 0); c.ellipse(0, 0, 300, 150, 0, 0, TAU); };
+    ctx.beginPath(); outer(ctx); ink(ctx, C.R, LW);
+    ctx.save(); ctx.beginPath(); outer(ctx); ctx.clip(); ctx.lineWidth = LW * .8;
+    for (let i = 0; i < 22; i++) {
+      const t0 = i * TAU / 22, t1 = t0 + 2.35 + Math.sin(i * 1.7) * .5;
+      ctx.strokeStyle = i % 3 ? C.K : C.W; ctx.beginPath(); ctx.moveTo(Math.cos(t0) * 300, Math.sin(t0) * 150); ctx.lineTo(Math.cos(t1) * 300, Math.sin(t1) * 150); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.ellipse(0, 6, 205, 78, 0, 0, TAU); ink(ctx, C.Y, LW);
+    shade(ctx, outer, -40, -40, dk);
+    ctx.beginPath(); outer(ctx); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke();
+  }, {s: .3, dy: 120});
+  part(ctx, a, 2, 0, -40, () => {
+    ctx.beginPath(); ctx.moveTo(-58, 0); ctx.lineTo(58, 0); ctx.lineTo(36, 118); ctx.lineTo(-36, 118); ctx.closePath(); ink(ctx, C.W, LW);
+    const f = ST.reduce ? 0 : Math.sin(a.T * 14) * 12, g = ST.reduce ? 0 : Math.sin(a.T * 19 + 1) * 8;
+    ctx.beginPath(); ctx.moveTo(-60, -8); ctx.quadraticCurveTo(-96, -110, -20 + g, -170); ctx.quadraticCurveTo(-8, -230 - f, 24, -280 - f);
+    ctx.quadraticCurveTo(32, -190, 76, -130); ctx.quadraticCurveTo(100, -60, 60, -8); ctx.closePath(); ink(ctx, C.Y, LW);
+    ctx.beginPath(); ctx.moveTo(-26, -8); ctx.quadraticCurveTo(-48, -64, -2, -112 + g); ctx.quadraticCurveTo(10, -150 - f * .5, 14, -170); ctx.quadraticCurveTo(46, -90, 32, -8); ctx.closePath(); ink(ctx, C.R, LW);
+  }, {s: .2, dy: 100});
+}
+
+function heroSnow(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6);
+  part(ctx, a, 0, 0, -30, () => {
+    const disc = c => circ(c, 0, 0, 236);
+    ctx.beginPath(); disc(ctx); ink(ctx, C.B, LW); shade(ctx, disc, -58, -58, dk);
+    ctx.beginPath(); disc(ctx); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke();
+  }, {s: .2, dy: 0, rot: .6});
+  part(ctx, a, 1, 0, -30, () => {
+    ctx.rotate(ST.reduce ? 0 : a.p * .7);
+    for (let i = 0; i < 6; i++) {
+      ctx.save(); ctx.rotate(i * PI / 3);
+      for (const bx of [66, 128]) for (const sg of [-1, 1]) {
+        ctx.save(); ctx.translate(bx, 0); ctx.rotate(sg * .85); ctx.beginPath(); ctx.rect(0, -12, 62, 24); ink(ctx, C.W, LW * .8); ctx.restore();
+      }
+      ctx.beginPath(); ctx.rect(0, -15, 196, 30); ink(ctx, C.W, LW);
+      ctx.restore();
+    }
+    ctx.beginPath(); circ(ctx, 0, 0, 44); ink(ctx, C.W, LW);
+  }, {s: 0, dy: 0, rot: -1.4});
+  part(ctx, a, 3, 0, 232, () => {
+    ctx.rotate(.04);
+    ctx.beginPath(); rr(ctx, -250 + LW * 1.6, -54 + LW * 1.6, 500, 108, 10); ctx.fillStyle = C.K; ctx.fill();
+    ctx.beginPath(); rr(ctx, -250, -54, 500, 108, 10); ink(ctx, C.Y, LW);
+    ctx.fillStyle = C.K; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; setFont(ctx, 80); ctx.fillText('雙奧之城', 0, 5);
+  }, {s: .2, dx: -160, dy: 60, rot: -.4});
+}
+
+function heroMoon(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.7), t = quintOut(clamp(a.p / .95));
+  part(ctx, a, 0, -40, 40, () => {
+    const moon = c => circ(c, 0, 0, 225);
+    ctx.beginPath(); moon(ctx); ink(ctx, C.W, LW);
+    for (const [x, y, r] of [[-90, -70, 52], [70, -110, 34], [-40, 80, 40], [100, 50, 56], [-150, 30, 24]]) { ctx.beginPath(); circ(ctx, x, y, r); ink(ctx, C.Y, LW * .8); }
+    shade(ctx, moon, -70, -70, dk);
+    ctx.beginPath(); moon(ctx); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke();
+  }, {s: .2, dy: 120});
+  part(ctx, a, 2, 190, -215, () => {
+    const earth = c => circ(c, 0, 0, 74);
+    ctx.beginPath(); earth(ctx); ink(ctx, C.B, LW);
+    ctx.save(); ctx.beginPath(); earth(ctx); ctx.clip(); ctx.beginPath(); circ(ctx, -20, -10, 34); circ(ctx, 30, 36, 24); ink(ctx, C.G, LW * .7); ctx.restore();
+    shade(ctx, earth, -22, -22, dk); ctx.beginPath(); earth(ctx); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke();
+  }, {s: 0, dy: 0});
+  part(ctx, a, 3, 0, 0, () => {
+    const p0 = [30, -150], p1 = [20, -330], p2 = [150, -215];
+    ctx.setLineDash([22, 18]); ctx.lineWidth = LW * 1.5; ctx.strokeStyle = C.K; ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.quadraticCurveTo(p1[0], p1[1], p2[0], p2[1]); ctx.stroke(); ctx.setLineDash([]);
+    const q = 1 - t, x = q * q * p0[0] + 2 * q * t * p1[0] + t * t * p2[0], y = q * q * p0[1] + 2 * q * t * p1[1] + t * t * p2[1];
+    const ang = Math.atan2(2 * q * (p1[1] - p0[1]) + 2 * t * (p2[1] - p1[1]), 2 * q * (p1[0] - p0[0]) + 2 * t * (p2[0] - p1[0]));
+    ctx.save(); ctx.translate(x, y); ctx.rotate(ang + PI / 2);
+    ctx.beginPath(); ctx.moveTo(-26, 22); ctx.lineTo(-16, -26); ctx.lineTo(16, -26); ctx.lineTo(26, 22); ctx.closePath(); ink(ctx, C.R, LW);
+    ctx.beginPath(); circ(ctx, 0, -2, 9); ink(ctx, C.W, LW * .7); ctx.restore();
+  }, {s: 0, dy: 0});
+  for (let i = 0; i < 5; i++) part(ctx, a, 4 + i, [-270, 250, 270, -240, 90][i], [-210, 120, -40, 190, 250][i], () => {
+    const tw = ST.reduce ? 1 : .75 + .25 * Math.sin(a.T * 6 + i * 2); ctx.scale(tw, tw); ctx.beginPath(); polyPath(ctx, starPts(0, 0, 26, 8, 4, 0)); ink(ctx, C.Y, LW * .7);
+  }, {s: 0, dy: 0, rot: 1});
+}
+
+function heroBook(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6);
+  part(ctx, a, 0, 0, 30, () => {
+    ctx.beginPath(); rr(ctx, -176 + 22, -214 + 22, 380, 470, 12); ink(ctx, C.W, LW);
+    const cover = c => rr(c, -190, -230, 380, 470, 12);
+    ctx.beginPath(); cover(ctx); ink(ctx, C.R, LW); shade(ctx, cover, 40, 0, dk);
+    ctx.beginPath(); ctx.rect(-190, -230, 36, 470); ink(ctx, C.B, LW);
+    ctx.beginPath(); ctx.moveTo(128, -230); ctx.lineTo(166, -230); ctx.lineTo(166, -150); ctx.lineTo(147, -172); ctx.lineTo(128, -150); ctx.closePath(); ink(ctx, C.Y, LW);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; setFont(ctx, 104);
+    ctx.lineWidth = LW * 2.6; ctx.strokeStyle = C.K; ctx.strokeText('十五五', 10, -40); ctx.fillStyle = C.Y; ctx.fillText('十五五', 10, -40);
+    ctx.beginPath(); rr(ctx, -110, 50, 240, 62, 31); ink(ctx, C.W, LW);
+    ctx.fillStyle = C.K; setFont(ctx, 40); ctx.fillText('2026–2030', 10, 83);
+    ctx.fillStyle = C.W; setFont(ctx, 54); ctx.lineWidth = LW * 1.6; ctx.strokeStyle = C.K; ctx.strokeText('規劃綱要', 10, 170); ctx.fillText('規劃綱要', 10, 170);
+  }, {s: .3, dy: 130, rot: -.2});
+  for (let i = 0; i < 5; i++) part(ctx, a, 3 + i, -230 + i * 115, -285 - Math.sin(i * 1.3) * 18 - (ST.reduce ? 0 : a.p * 30), () => {
+    ctx.rotate(ST.reduce ? 0 : Math.sin(a.T * 4 + i) * .15); ctx.beginPath(); polyPath(ctx, starPts(0, 0, 32, 13, 5, -PI / 2)); ink(ctx, C.Y, LW * .8);
+  }, {s: 0, dy: 40, rot: .8});
+}
+
+function heroBadge(ctx, a) {
+  const LW = a.lw, dk = dotPat(ctx, C.K, 12, 2.6), big = !!a.coda;
+  part(ctx, a, 0, 0, 0, () => {
+    ctx.beginPath(); polyPath(ctx, starPts(0, 0, 300, 224, 22, a.p * .6)); ink(ctx, big ? C.B : C.R, LW);
+    ctx.beginPath(); polyPath(ctx, starPts(0, 0, 224, 190, 22, -a.p * .5)); ink(ctx, C.Y, LW);
+    const disc = c => circ(c, 0, 0, 170);
+    ctx.beginPath(); disc(ctx); ink(ctx, C.W, LW); shade(ctx, disc, -40, -40, dk);
+    ctx.beginPath(); disc(ctx); ctx.lineWidth = LW; ctx.strokeStyle = C.K; ctx.stroke();
+    if (!big) {
+      ctx.fillStyle = C.R; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; setFont(ctx, 150);
+      ctx.lineWidth = LW * 2.4; ctx.strokeStyle = C.K; ctx.strokeText('77', 0, -22); ctx.fillText('77', 0, -22);
+      setFont(ctx, 62); ctx.fillStyle = C.K; ctx.fillText('週年', 0, 92);
+    }
+  }, {s: .1, dy: 0, rot: 1});
+  for (let i = 0; i < 5; i++) part(ctx, a, 3 + i, Math.cos(-PI / 2 + (i - 2) * .5) * 330, Math.sin(-PI / 2 + (i - 2) * .5) * 330 + (big ? 20 : 0), () => {
+    ctx.rotate((i - 2) * .5); ctx.beginPath(); polyPath(ctx, starPts(0, 0, 34, 14, 5, -PI / 2)); ink(ctx, C.Y, LW * .8);
+  }, {s: 0, dy: 0, rot: 1});
+}
+
+/* ===== d_main.js — 分鏡、時間軸、整幀繪製、對外介面 ===== */
+const EVT = 2200;
+const SC = (o) => o;
+const SCENES = [
+  SC({kind: 'intro', year: '新中國', tag: '1949 → 2026', cap: '大事記・30秒快閃', sub: '新中國成立77週年，一口氣看完', bg: C.Y, bg2: C.P, dot: C.R, accent: C.R, yc: [C.R, C.B, C.R], hero: heroBadge, sfx: [[0, 'whoosh'], [330, 'land'], [1100, 'sparkle']]}),
+  SC({year: '1949', tag: '10月1日', cap: '開國大典，中華人民共和國成立', sub: '北京天安門廣場，30萬軍民參加', bg: C.Y, bg2: C.P, dot: C.R, accent: C.R, yc: [C.R, C.B], hero: heroFlag, sfx: [[0, 'whoosh'], [300, 'land'], [900, 'ping']]}),
+  SC({year: '1964', tag: '10月16日', cap: '第一顆原子彈爆炸成功', sub: '新疆羅布泊，中國成為世界第五個擁有核武器的國家', bg: C.P, bg2: C.Y, dot: C.W, accent: C.B, yc: [C.B, C.R], hero: heroAtom, sfx: [[0, 'whoosh'], [300, 'land'], [800, 'sparkle']]}),
+  SC({year: '1971', tag: '10月25日', cap: '聯合國恢復中華人民共和國合法席位', sub: '聯合國大會第2758號決議', bg: C.Y, bg2: C.P, dot: C.R, accent: C.B, yc: [C.B, C.R], hero: heroSeat, sfx: [[0, 'whoosh'], [300, 'land']]}),
+  SC({year: '1978', tag: '12月18–22日', cap: '十一屆三中全會，確定改革開放', sub: '中國現代化建設進入新時期', bg: C.P, bg2: C.Y, dot: C.W, accent: C.G, yc: [C.G, C.R], hero: heroGear, sfx: [[0, 'whoosh'], [300, 'land'], [700, 'click']]}),
+  SC({year: '1997·1999', tag: '港澳回歸', cap: '香港回歸，澳門回歸', sub: '香港1997年7月1日，澳門1999年12月20日', bg: C.Y, bg2: C.P, dot: C.R, accent: C.R, yc: [C.R, C.B], hero: heroHKMO, sfx: [[0, 'whoosh'], [300, 'land'], [700, 'pop']]}),
+  SC({year: '2001', tag: '12月11日', cap: '中國加入世界貿易組織', sub: '成為WTO成員', bg: C.P, bg2: C.Y, dot: C.W, accent: C.B, yc: [C.B, C.R], hero: heroGlobe, sfx: [[0, 'whoosh'], [300, 'land'], [800, 'ping']]}),
+  SC({year: '2003', tag: '10月15日', cap: '神舟五號升空，楊利偉進入太空', sub: '中國首次載人航天，繞地球飛行14圈', bg: C.Y, bg2: C.P, dot: C.R, accent: C.B, yc: [C.R, C.B], hero: heroRocket, sfx: [[0, 'whoosh'], [250, 'land'], [700, 'whoosh']]}),
+  SC({year: '2008', tag: '8月8日', cap: '北京奧運會開幕', sub: '北京首次舉辦夏季奧運會', bg: C.P, bg2: C.Y, dot: C.W, accent: C.R, yc: [C.R, C.B], hero: heroStadium, sfx: [[0, 'whoosh'], [300, 'land'], [900, 'sparkle']]}),
+  SC({year: '2022', tag: '2月4日', cap: '北京冬奧會開幕', sub: '北京成為首個舉辦夏季與冬季奧運的「雙奧之城」', bg: C.Y, bg2: C.P, dot: C.R, accent: C.B, yc: [C.B, C.R], hero: heroSnow, sfx: [[0, 'whoosh'], [300, 'land'], [900, 'sparkle']]}),
+  SC({year: '2024', tag: '6月25日', cap: '嫦娥六號帶回月背樣品', sub: '人類首次月球背面採樣返回', bg: C.P, bg2: C.Y, dot: C.W, accent: C.B, yc: [C.B, C.R], hero: heroMoon, sfx: [[0, 'whoosh'], [300, 'land'], [1000, 'ping']]}),
+  SC({year: '2026', tag: '3月12日', cap: '「十五五」規劃綱要獲批准', sub: '3月12日全國人大通過，規劃期2026至2030年', bg: C.Y, bg2: C.P, dot: C.R, accent: C.R, yc: [C.R, C.B], hero: heroBook, sfx: [[0, 'whoosh'], [300, 'land'], [900, 'sparkle']]}),
+  SC({kind: 'coda', year: '77', tag: '10月1日', cap: '新中國成立77週年', sub: '1949年10月1日 → 2026年10月1日', bg: C.P, bg2: C.Y, dot: C.W, accent: C.B, yc: [C.R, C.Y], hero: heroBadge, sfx: [[0, 'whoosh'], [330, 'land'], [700, 'sparkle'], [1500, 'ping'], [2300, 'sparkle']]})
+];
+SCENES.forEach((s, i) => { s.idx = i; s.start = Math.min(i, SCENES.length - 1) * EVT; s.dur = s.kind === 'coda' ? 3600 : EVT; });
+const TOTAL = SCENES[SCENES.length - 1].start + SCENES[SCENES.length - 1].dur;   // 30000 ms
+
+function sceneIndexAt(T) {
+  T = clamp(T, 0, TOTAL - 1);
+  for (let i = SCENES.length - 1; i >= 0; i--) if (T >= SCENES[i].start) return i;
+  return 0;
+}
+function sfxBetween(t0, t1) {
+  const out = [];
+  if (t1 <= t0) return out;
+  SCENES.forEach(sc => sc.sfx.forEach(([off, name]) => { const t = sc.start + off; if (t > t0 && t <= t1) out.push(name); }));
+  return out;
+}
+
+function draw(ctx, cssW, cssH, dpr, Tms, opts) {
+  ST.reduce = !!(opts && opts.reduce);
+  const cs = Math.min(cssW, cssH) / 1000, Wl = cssW / cs, Hl = cssH / cs;
+  ST.lw = clamp(6.2 / cs, 6.2, 14);
+  ctx.setTransform(dpr * cs, 0, 0, dpr * cs, 0, 0);
+  ctx.globalAlpha = 1; ctx.setLineDash([]);
+  const L = layoutFor(Wl, Hl), i = sceneIndexAt(Tms), sc0 = SCENES[i];
+  const coda = sc0.kind === 'coda';
+  const sc = Object.assign({}, sc0);
+  if (coda) { L.hero = Object.assign({}, L.hero, {R: L.hero.R * (L.land ? .98 : 1.08)}); sc.yBox = {x: L.hero.x, y: L.hero.y + L.hero.R * .02, maxW: L.hero.R * 1.55, size: L.hero.R * 1.4, align: 'center'}; }
+  const tr = clamp(Tms - sc.start, 0, sc.dur), D = coda ? 1e9 : sc.dur, u = tr / sc.dur;
+  const ramp = coda ? RAMP_CODA : RAMP_EVT;
+  const p = ST.reduce ? .5 : remap(ramp, u), sw = ST.reduce ? 0 : slowW(ramp, u);
+  const k = ST.reduce ? .5 : quintInOut(p), CR = MP.crane, OR = MP.orbit / .24;
+  const R = L.hero.R, dirn = sc.idx % 2 ? 1 : -1;
+  const cam = {
+    s: lerp(1 + .32 * CR, 1 - .07 * CR, k), sy: lerp(1 + .08 * CR, 1 - .07 * CR, k),
+    dy: lerp(-.16 * R * CR, .09 * R * CR, k), dx: dirn * Math.sin(k * PI) * .10 * R * OR,
+    rot: dirn * lerp(-.05, .05, k) * OR
+  };
+  if (ST.reduce) { cam.s = 1; cam.sy = 1; cam.dy = 0; cam.dx = 0; cam.rot = 0; }
+  drawBG(ctx, L, sc, cam, p);
+
+  /* 落地衝擊環（年份砸下的瞬間）*/
+  const ir = (tr - 300) / 520;
+  if (ir > 0 && ir < 1 && !ST.reduce) {
+    const rad = lerp(R * .55, R * 1.55, quintOut(ir));
+    ctx.save(); ctx.translate(L.hero.x + cam.dx, L.hero.y + cam.dy); ctx.beginPath(); circ(ctx, 0, 0, rad);
+    ctx.lineWidth = ST.lw * (3.2 - 2.4 * ir); ctx.strokeStyle = C.K; ctx.stroke();
+    ctx.lineWidth = ST.lw * (1.6 - 1.2 * ir); ctx.strokeStyle = C.W; ctx.stroke(); ctx.restore();
+  }
+
+  /* 英雄圖：升降搖臂（低角度仰視 → 高角度俯瞰）+ 弧線平移 */
+  const ex = exitState(tr, D, 1), Rs = R / 300;
+  if (ex.a > 0) {
+    ctx.save();
+    ctx.translate(L.hero.x + cam.dx, L.hero.y + cam.dy + ex.dy); ctx.rotate(cam.rot);
+    ctx.scale(cam.s * Rs * ex.s, cam.s * Rs * cam.sy * ex.s);
+    const a = {tr, p, k, sw, T: Tms / 1000, lw: ST.lw / (cam.s * Rs), coda};
+    ctx.beginPath(); sc.hero(ctx, a);
+    ctx.restore();
+  }
+
+  /* 子彈時間的細節：慢速區浮現旋轉的火花星 */
+  if (sw > .02 && !ST.reduce) {
+    for (let j = 0; j < 8; j++) {
+      const ang = p * 3.2 + j * TAU / 8, rr0 = R * (1.12 + .1 * Math.sin(j * 2.1 + p * 6)) * cam.s;
+      const x = L.hero.x + cam.dx + Math.cos(ang) * rr0 * 1.05, y = L.hero.y + cam.dy + Math.sin(ang) * rr0 * .8;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(ang * 2); ctx.scale(sw, sw);
+      ctx.beginPath(); polyPath(ctx, starPts(0, 0, 44, 13, 4, 0)); ink(ctx, j % 2 ? C.W : C.R, ST.lw * .5);
+      ctx.restore();
+    }
+  }
+  drawFG(ctx, L, sc, cam, p, tr);
+  drawYear(ctx, L, sc, tr, D, p, sw);
+  drawCard(ctx, L, sc, tr, D);
+  drawWipe(ctx, L, sc, tr);
+}
+
+g.PRC77 = {
+  draw, TOTAL, sfxBetween, sceneIndexAt,
+  scenes: SCENES.map(s => ({year: s.year, tag: s.tag, cap: s.cap, sub: s.sub, start: s.start, dur: s.dur, kind: s.kind || 'event'}))
+};
+
+/* ===== e_audio.js — Web Audio 即時合成：Game Boy 風配樂（111 BPM, E 多利安）與卡通音效 ===== */
+const Aud = (function () {
+  let ac = null, master, musicBus, sfxBus, noiseBuf, waves = {}, timer = null, nextT = 0, step = 0, wanted = false, running = false;
+  const BPM = 111, SPS = 60 / BPM / 4;
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  /* E 多利安：E F# G A B C# D */
+  const LEAD = [
+    [[0, 76, 2], [3, 79, 1], [4, 83, 2], [7, 81, 1], [8, 79, 2], [10, 76, 2], [12, 74, 3]],
+    [[0, 81, 2], [3, 76, 1], [4, 81, 2], [6, 85, 1], [8, 83, 2], [10, 81, 2], [12, 79, 3]],
+    [[0, 83, 2], [3, 78, 1], [4, 83, 2], [6, 86, 1], [8, 85, 2], [10, 83, 2], [12, 81, 3]],
+    [[0, 81, 2], [2, 79, 1], [4, 76, 2], [6, 79, 2], [8, 81, 4], [12, 83, 2], [14, 81, 1]]
+  ];
+  const ROOT = [40, 45, 47, 45];
+  const ARP = [[64, 67, 71, 74], [69, 73, 76, 79], [59, 62, 66, 69], [69, 73, 76, 79]];
+  const BASS = [[0, 0], [2, 0], [4, 12], [6, 0], [8, 0], [10, 0], [12, 12], [14, 7]];
+
+  function pulse(duty) {
+    const N = 48, re = new Float32Array(N), im = new Float32Array(N);
+    for (let n = 1; n < N; n++) { re[n] = 2 * Math.sin(2 * PI * n * duty) / (n * PI); im[n] = 2 * (1 - Math.cos(2 * PI * n * duty)) / (n * PI); }
+    return ac.createPeriodicWave(re, im);
+  }
+  function init() {
+    if (ac) return true;
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+    ac = new AC();
+    master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination);
+    musicBus = ac.createGain(); musicBus.gain.value = .5; musicBus.connect(master);
+    sfxBus = ac.createGain(); sfxBus.gain.value = .9; sfxBus.connect(master);
+    waves.p25 = pulse(.25); waves.p125 = pulse(.125); waves.p50 = pulse(.5);
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 1, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    return true;
+  }
+  function env(g, t, a, peak, dur, rel) {
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + a);
+    g.gain.exponentialRampToValueAtTime(Math.max(.0002, peak * .55), t + Math.max(a + .001, dur * .6));
+    g.gain.exponentialRampToValueAtTime(.0002, t + dur + (rel || .04));
+  }
+  function osc(bus, t, f0, f1, dur, type, peak, wave) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    if (wave) o.setPeriodicWave(wave); else o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t); if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    env(g, t, .004, peak, dur); o.connect(g); g.connect(bus); o.start(t); o.stop(t + dur + .08);
+  }
+  function noise(bus, t, dur, ftype, f0, f1, peak, q) {
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; f.type = ftype; f.Q.value = q || 1;
+    f.frequency.setValueAtTime(f0, t); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    env(g, t, .006, peak, dur); s.connect(f); f.connect(g); g.connect(bus); s.start(t, Math.random() * .5); s.stop(t + dur + .08);
+  }
+  function playStep(s, t) {
+    const bar = (s >> 4) & 3, st = s & 15;
+    LEAD[bar].forEach(([n, m, len]) => { if (n === st) osc(musicBus, t, mtof(m), 0, len * SPS * .92, 'square', .085, waves.p25); });
+    BASS.forEach(([n, o]) => { if (n === st) osc(musicBus, t, mtof(ROOT[bar] + o), 0, SPS * 1.7, 'triangle', .26); });
+    osc(musicBus, t, mtof(ARP[bar][st & 3]), 0, SPS * .8, 'square', .03, waves.p125);
+    if (st === 0 || st === 8) osc(musicBus, t, 130, 46, .1, 'sine', .22);
+    if (st === 4 || st === 12) noise(musicBus, t, .07, 'bandpass', 1800, 900, .07, .8);
+    if ((st & 3) === 2) noise(musicBus, t, .03, 'highpass', 6000, 0, .035, .7);
+  }
+  function tick() {
+    if (!running) return;
+    while (nextT < ac.currentTime + .3) { playStep(step, nextT); nextT += SPS; step = (step + 1) & 63; }
+  }
+  function startMusic() {
+    if (running) return; running = true; step = 0; nextT = ac.currentTime + .06;
+    timer = setInterval(tick, 40); tick();
+  }
+  function stopMusic() { running = false; if (timer) clearInterval(timer); timer = null; }
+
+  const SFX = {
+    pop(t) { osc(sfxBus, t, 280, 900, .09, 'square', .11); osc(sfxBus, t + .06, 900, 600, .05, 'sine', .08); },
+    jump(t) { osc(sfxBus, t, 220, 700, .18, 'square', .1); },
+    whoosh(t) { noise(sfxBus, t, .3, 'bandpass', 300, 2800, .22, 1.1); },
+    click(t) { osc(sfxBus, t, 1500, 800, .03, 'square', .08); },
+    sparkle(t) { [1318, 1760, 2093, 2637].forEach((f, i) => osc(sfxBus, t + i * .045, f, f, .1, 'triangle', .07)); },
+    ping(t) { osc(sfxBus, t, 1568, 1568, .4, 'sine', .13); osc(sfxBus, t, 3136, 3136, .2, 'sine', .04); },
+    land(t) { osc(sfxBus, t, 190, 46, .24, 'sine', .32); noise(sfxBus, t, .08, 'lowpass', 1000, 200, .2, .7); },
+    notify(t) { osc(sfxBus, t, 880, 880, .09, 'square', .08); osc(sfxBus, t + .1, 1175, 1175, .14, 'square', .08); },
+    flip(t) { noise(sfxBus, t, .1, 'bandpass', 1200, 3400, .14, 1.4); }
+  };
+  return {
+    get on() { return wanted; },
+    /* 使用者點擊後才開啟（瀏覽器自動播放限制）*/
+    set(on, playing) {
+      wanted = on;
+      if (on) {
+        if (!init()) { wanted = false; return false; }
+        ac.resume(); master.gain.cancelScheduledValues(ac.currentTime); master.gain.setTargetAtTime(.55, ac.currentTime, .05);
+        if (playing) startMusic();
+      } else if (ac) {
+        master.gain.cancelScheduledValues(ac.currentTime); master.gain.setTargetAtTime(0, ac.currentTime, .04);
+        setTimeout(() => { if (!wanted) stopMusic(); }, 220);
+      }
+      return wanted;
+    },
+    pause() { stopMusic(); },
+    resume() { if (wanted && ac) { ac.resume(); startMusic(); } },
+    restart() { stopMusic(); if (wanted && ac) startMusic(); },
+    sfx(name) { if (!wanted || !ac || !SFX[name]) return; SFX[name](ac.currentTime + .01); }
+  };
+})();
+
+/* ===== f_ui.js — 畫布、播放控制、聲音開關、進度條、資料來源 ===== */
+function boot() {
+  const $ = id => document.getElementById(id);
+  const cv = $('stage'), ctx = cv.getContext('2d');
+  const mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : {matches: false};
+  let reduce = mq.matches, T = 0, playing = true, done = false, last = 0, W = 0, H = 0, dpr = 1, srcOpen = false, wasPlaying = false;
+  const btnSound = $('btnSound'), btnPlay = $('btnPlay'), btnSrc = $('btnSrc'), bar = $('barFill'), dlg = $('src'), hint = $('hint');
+
+  /* 無障礙：把事件文字放進隱藏清單 */
+  const ol = $('events');
+  SCENES.forEach(s => { if (s.kind === 'intro') return; const li = document.createElement('li'); li.textContent = (s.kind === 'coda' ? '' : s.year + '年' + s.tag + '：') + s.cap + '。' + s.sub; ol.appendChild(li); });
+
+  function fit() {
+    W = Math.max(1, window.innerWidth); H = Math.max(1, window.innerHeight); dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    render();
+  }
+  function render() { draw(ctx, W, H, dpr, T, {reduce}); bar.style.width = (clamp(T / TOTAL) * 100).toFixed(2) + '%'; }
+  function labels() {
+    btnPlay.textContent = done ? '重播' : playing ? '暫停' : '播放';
+    btnPlay.setAttribute('aria-label', done ? '重新播放' : playing ? '暫停動畫' : '播放動畫');
+    btnSound.textContent = Aud.on ? '聲音：開' : '聲音：關';
+    btnSound.setAttribute('aria-pressed', Aud.on ? 'true' : 'false');
+    hint.hidden = !(done);
+  }
+  function setPlaying(v) {
+    playing = v; last = 0;
+    if (v) Aud.resume(); else Aud.pause();
+    labels();
+  }
+  function replay() { T = 0; done = false; last = 0; playing = true; Aud.restart(); if (Aud.on) Aud.sfx('flip'); labels(); render(); }
+
+  function loop(ts) {
+    requestAnimationFrame(loop);
+    if (!last) last = ts;
+    const dt = Math.min(64, ts - last); last = ts;
+    if (playing && !done) {
+      const prev = T; T += dt;
+      if (T >= TOTAL) { T = TOTAL - 1; done = true; playing = false; Aud.pause(); labels(); if (Aud.on) Aud.sfx('notify'); }
+      sfxBetween(prev, T).forEach(n => Aud.sfx(n));
+      render();
+    }
+  }
+  btnPlay.addEventListener('click', () => { if (done) replay(); else setPlaying(!playing); });
+  btnSound.addEventListener('click', () => { Aud.set(!Aud.on, playing && !done); if (Aud.on) Aud.sfx('click'); labels(); });
+  function openSrc(v) {
+    srcOpen = v; dlg.hidden = !v; btnSrc.setAttribute('aria-expanded', v ? 'true' : 'false');
+    if (v) { wasPlaying = playing; if (playing) setPlaying(false); dlg.querySelector('button').focus(); }
+    else { if (wasPlaying && !done) setPlaying(true); btnSrc.focus(); }
+  }
+  btnSrc.addEventListener('click', () => openSrc(!srcOpen));
+  $('srcClose').addEventListener('click', () => openSrc(false));
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && srcOpen) openSrc(false);
+    else if ((e.key === ' ' || e.key === 'k') && !srcOpen && e.target.tagName !== 'BUTTON') { e.preventDefault(); if (done) replay(); else setPlaying(!playing); }
+    else if (e.key === 'm' && !srcOpen) btnSound.click();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && playing) setPlaying(false); });
+  window.addEventListener('resize', fit);
+  if (mq.addEventListener) mq.addEventListener('change', e => { reduce = e.matches; render(); });
+
+  /* 供截圖與除錯：跳到指定毫秒並暫停 */
+  window.PRC77_seek = ms => { T = clamp(ms, 0, TOTAL - 1); playing = false; done = false; render(); labels(); };
+  window.PRC77_info = () => ({T, TOTAL, reduce});
+  fit(); labels();
+  requestAnimationFrame(loop);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+
+})(window);
+</script>
+</body>
+</html>

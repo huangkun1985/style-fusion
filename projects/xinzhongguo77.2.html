@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>新中國77週年大事記</title>
+<!--
+  資料來源（查證於 2026-10-04）：
+  1949 開國大典：維基百科「中华人民共和国历史」「1949年中國」
+  1964 首顆原子彈：國防科工局 / 央視新聞「百年瞬間」
+  1970 東方紅一號：美國之音「中华人民共和国70年历史大事记」
+  1971 聯大2758號決議：維基百科「中华人民共和国」
+  1978 十一屆三中全會：同上（美國之音大事記）
+  1997 香港回歸：人民網 / 北京政法網
+  2001 加入WTO：人民網 / 共產黨員網
+  2003 神舟五號：中國日報網 / 央廣網
+  2008 北京奧運：維基百科「中华人民共和国」
+  2021 脫貧攻堅：新華社 / 國家統計局
+  2024 嫦娥六號：新華社 / 國家航天局
+  2026 十五五：新華網 / 中國政府網（規劃綱要）；2025年GDP突破140萬億元：中國政府網
+-->
+<style>
+:root{--y:#FFDE00;--p:#FF66CC;--k:#000000;--w:#FFFFFF;--r:#FF0000;--b:#0055FF;--g:#00A651;--ln:6.2px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--y);color:var(--k);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei","Heiti TC",system-ui,sans-serif;font-weight:900;overflow:hidden;-webkit-text-size-adjust:100%}
+#stage{position:fixed;inset:0;overflow:hidden;background:var(--y)}
+.scene{position:absolute;inset:0;overflow:hidden;visibility:hidden;perspective:1100px;background:var(--bgc)}
+.bg{position:absolute;inset:-15%;background-color:var(--bgc);
+  background-image:radial-gradient(circle at 25% 25%,var(--dc) 0 3.6px,transparent 4px),radial-gradient(circle at 75% 75%,var(--dc) 0 3.6px,transparent 4px);
+  background-size:28px 28px;will-change:transform}
+.rays{position:absolute;inset:-70%;background:repeating-conic-gradient(var(--rc) 0 6deg,transparent 6deg 12deg);will-change:transform}
+.ghost{position:absolute;left:50%;top:50%;font-family:Impact,"Arial Black","Haettenschweiler",sans-serif;font-size:min(48vw,72vh);line-height:1;color:transparent;-webkit-text-stroke:var(--ln) var(--k);white-space:nowrap;pointer-events:none;will-change:transform}
+.cam{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform-style:preserve-3d;will-change:transform;padding:0 4vw}
+.exit{position:relative;will-change:transform}
+.card{position:relative;width:min(92vw,980px);background:var(--w);border:var(--ln) solid var(--k);box-shadow:12px 12px 0 var(--k);
+  padding:clamp(14px,2.6vw,32px);padding-bottom:calc(clamp(14px,2.6vw,32px) + 14px);will-change:transform}
+.card::after{content:"";position:absolute;left:0;right:0;bottom:0;height:14px;background-image:radial-gradient(circle,var(--k) 0 2px,transparent 2.4px);background-size:10px 10px}
+.row1,.body{position:relative;z-index:1}
+.row1{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.yr{display:flex;font-family:Impact,"Arial Black","Haettenschweiler",sans-serif;font-size:clamp(64px,17vw,176px);line-height:.92;letter-spacing:-.01em}
+.yr span{display:inline-block;color:var(--ac);-webkit-text-stroke:12.4px var(--k);paint-order:stroke fill;text-shadow:7px 7px 0 var(--k);will-change:transform}
+.chip{font-size:clamp(16px,3vw,30px);border:var(--ln) solid var(--k);padding:.15em .6em;box-shadow:5px 5px 0 var(--k);white-space:nowrap;color:var(--k);will-change:transform}
+.body{display:grid;grid-template-columns:minmax(0,.75fr) minmax(0,1.25fr);gap:clamp(12px,3vw,32px);align-items:center;margin-top:clamp(8px,1.6vw,18px)}
+.ico{position:relative;width:min(100%,34vh);aspect-ratio:1;justify-self:center;will-change:transform}
+.ico::before{content:"";position:absolute;inset:6% -4% -6% 10%;transform:translate(10px,12px);
+  background-image:radial-gradient(circle,var(--k) 0 var(--r2,1px),transparent calc(var(--r2,1px) + .4px));background-size:11px 11px;clip-path:ellipse(46% 46% at 50% 50%)}
+.ico svg{position:relative;display:block;width:100%;height:100%;overflow:visible}
+.ico svg *{vector-effect:non-scaling-stroke;stroke:var(--k);stroke-width:var(--ln);stroke-linejoin:round;stroke-linecap:round}
+h2{font-size:clamp(26px,5.6vw,60px);line-height:1.14;letter-spacing:.02em;will-change:transform}
+.hl{background-image:linear-gradient(transparent 56%,var(--hl) 56%);background-repeat:no-repeat;background-size:var(--w2,0%) 100%;padding:0 .1em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.txt p{margin-top:.5em;font-size:clamp(15px,2.5vw,24px);font-weight:700;line-height:1.45;will-change:transform}
+.stamp{position:absolute;top:-34px;right:-22px;width:clamp(78px,13vw,128px);z-index:3;pointer-events:none;will-change:transform}
+.stamp svg,.sp svg{display:block;width:100%;overflow:visible}
+.stamp svg *,.sp svg *{vector-effect:non-scaling-stroke;stroke:var(--k);stroke-width:var(--ln);stroke-linejoin:round}
+.sp{position:absolute;width:clamp(28px,5vw,48px);z-index:3;pointer-events:none;will-change:transform}
+.sp1{left:-3%;top:34%}.sp2{right:16%;top:-5%}.sp3{right:-2%;bottom:22%}
+.lines{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.lines b{position:absolute;left:0;height:8px;background:var(--k);visibility:hidden;will-change:transform}
+.lines b.wh{background:var(--w)}
+#cv{position:fixed;inset:0;z-index:15;pointer-events:none}
+#hud{position:fixed;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;display:flex;justify-content:space-between;gap:10px;z-index:20;pointer-events:none}
+#hud button{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:900;font-size:16px;color:var(--k);background:var(--w);border:var(--ln) solid var(--k);box-shadow:4px 4px 0 var(--k);padding:6px 14px;cursor:pointer}
+#hud button:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--k)}
+#hud button:focus-visible{outline:4px solid var(--b);outline-offset:3px}
+#rep{background:var(--r)!important}
+#snd[aria-pressed="true"]{background:var(--b);color:var(--w)}
+#snd[aria-pressed="true"] svg *{stroke:var(--w);fill:var(--w)}
+#snd svg{width:22px;height:22px}
+#snd svg *{stroke:var(--k);stroke-width:2.6;fill:var(--k);stroke-linejoin:round;stroke-linecap:round}
+#snd svg #wv{fill:none!important}
+#bar{position:fixed;left:50%;transform:translateX(-50%);bottom:max(14px,env(safe-area-inset-bottom));width:min(88vw,720px);height:26px;border:var(--ln) solid var(--k);background:var(--w);z-index:20}
+#bar i{display:block;height:100%;width:0;background:var(--r)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#list{display:none}
+body.rm{overflow:auto}
+.rm #stage,.rm #cv,.rm #hud,.rm #bar{display:none}
+.rm #list{display:block;padding:28px 4vw 64px;background:var(--y);background-image:radial-gradient(circle at 25% 25%,var(--p) 0 3.6px,transparent 4px),radial-gradient(circle at 75% 75%,var(--p) 0 3.6px,transparent 4px);background-size:28px 28px}
+#list h1{font-size:clamp(30px,7vw,64px);text-align:center;margin-bottom:28px}
+#list h1 span{background:var(--w);border:var(--ln) solid var(--k);box-shadow:8px 8px 0 var(--k);padding:.1em .4em;display:inline-block}
+#list .card{margin:0 auto 40px}
+#list .ico::before{--r2:2.6px}
+#list .hl{--w2:100%}
+#list footer{max-width:980px;margin:0 auto;font-weight:700;font-size:15px;background:var(--w);border:var(--ln) solid var(--k);padding:12px 16px}
+@media (max-width:700px){
+  .body{grid-template-columns:1fr}
+  .ico{width:min(46vw,22vh)}
+  .stamp{top:-30px;right:-12px}
+  #hud button{font-size:14px;padding:5px 10px}
+}
+</style>
+</head>
+<body>
+<main id="stage" aria-label="新中國成立77週年大事記，30秒快閃動畫"></main>
+<canvas id="cv" aria-hidden="true"></canvas>
+<div id="hud">
+  <button id="rep" type="button">重播</button>
+  <button id="snd" type="button" aria-pressed="false" aria-label="開啟或關閉聲音">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z"/><path id="wv" d="M16 8c2 2 2 6 0 8M19 5c4 4 4 10 0 14" fill="none"/></svg>
+    <span>聲音：關</span>
+  </button>
+</div>
+<div id="bar" aria-hidden="true"><i></i></div>
+<div class="sr" id="sr" aria-live="polite"></div>
+<div id="list"></div>
+
+<script>
+(()=>{
+'use strict';
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C={y:'#FFDE00',p:'#FF66CC',k:'#000000',w:'#FFFFFF',r:'#FF0000',b:'#0055FF',g:'#00A651'};
+
+/* ---------- 圖形：全部用程式生成 ---------- */
+const pt=(cx,cy,r,deg)=>{const t=deg*Math.PI/180;return (cx+r*Math.cos(t)).toFixed(1)+','+(cy+r*Math.sin(t)).toFixed(1)};
+const star=(cx,cy,R,rot=-90,ri)=>{ri=ri||R*.382;const a=[];for(let i=0;i<10;i++)a.push(pt(cx,cy,i%2?ri:R,rot+i*36));return a.join(' ')};
+const burst=(cx,cy,n,R,r)=>{const a=[];for(let i=0;i<n*2;i++)a.push(pt(cx,cy,i%2?r:R,i*180/n));return a.join(' ')};
+const gearPts=(cx,cy,n,R,r)=>{const s=360/n,a=[];for(let i=0;i<n;i++){[[-.23,r],[-.13,R],[.13,R],[.23,r]].forEach(([d,rr])=>a.push(pt(cx,cy,rr,i*s+d*s)))}return a.join(' ')};
+const S=(inner)=>`<svg viewBox="0 0 200 200" aria-hidden="true">${inner}</svg>`;
+const ICON={
+ flag:()=>S(`<line x1="30" y1="20" x2="30" y2="188"/><rect x="30" y="32" width="152" height="108" fill="${C.r}"/><polygon points="${star(68,70,26)}" fill="${C.y}"/>${[[112,38],[128,58],[128,82],[112,102]].map(([x,y],i)=>`<polygon points="${star(x,y,9,-90+i*22)}" fill="${C.y}"/>`).join('')}`),
+ atom:()=>S(`${[0,60,120].map(a=>`<ellipse cx="100" cy="100" rx="84" ry="30" fill="none" transform="rotate(${a} 100 100)"/>`).join('')}<circle cx="100" cy="100" r="18" fill="${C.r}"/>${[0,60,120].map((a,i)=>`<circle cx="184" cy="100" r="11" fill="${[C.b,C.y,C.g][i]}" transform="rotate(${a} 100 100)"/>`).join('')}`),
+ sat:()=>S(`<ellipse cx="100" cy="100" rx="90" ry="34" fill="none" transform="rotate(-25 100 100)"/>${[45,135,225,315].map(a=>{const t=a*Math.PI/180,x=100+78*Math.cos(t),y=100+78*Math.sin(t);return `<line x1="100" y1="100" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" fill="${C.w}"/>`}).join('')}<circle cx="100" cy="100" r="36" fill="${C.r}"/><polygon points="${star(100,100,16)}" fill="${C.y}"/>`),
+ globe:()=>S(`<circle cx="100" cy="100" r="76" fill="${C.b}"/><path d="M58 70 Q78 48 102 64 Q112 90 84 100 Q56 102 58 70Z" fill="${C.g}"/><path d="M112 114 Q142 100 154 126 Q142 154 116 146Z" fill="${C.g}"/><ellipse cx="100" cy="100" rx="34" ry="76" fill="none"/><line x1="24" y1="100" x2="176" y2="100"/><circle cx="100" cy="100" r="76" fill="none"/>`),
+ gear:()=>S(`<polygon points="${gearPts(100,100,10,86,64)}" fill="${C.y}"/><circle cx="100" cy="100" r="28" fill="${C.w}"/><circle cx="100" cy="100" r="8" fill="${C.r}"/>`),
+ flower:()=>S(`${[0,1,2,3,4].map(i=>`<ellipse cx="100" cy="56" rx="30" ry="50" fill="${C.p}" transform="rotate(${i*72} 100 100)"/>`).join('')}${[0,1,2,3,4].map(i=>`<path d="M100 30 L100 70" style="stroke:${C.w}" transform="rotate(${i*72} 100 100)"/>`).join('')}<circle cx="100" cy="100" r="17" fill="${C.y}"/>`),
+ boxes:()=>S(`<polygon points="14,150 186,150 168,180 32,180" fill="${C.k}"/>${[[30,112,C.r],[76,112,C.b],[122,112,C.g],[53,76,C.y],[99,76,C.r],[76,40,C.b]].map(([x,y,c])=>`<rect x="${x}" y="${y}" width="46" height="36" fill="${c}"/>`).join('')}<path d="M6 192 Q26 180 46 192 T86 192 T126 192 T166 192 T200 192" fill="none" style="stroke:${C.b}"/>`),
+ rocket:()=>S(`<polygon points="74,116 42,160 76,148" fill="${C.r}"/><polygon points="126,116 158,160 124,148" fill="${C.r}"/><path d="M100 12 C140 48 140 112 126 150 L74 150 C60 112 60 48 100 12Z" fill="${C.w}"/><circle cx="100" cy="78" r="18" fill="${C.b}"/><path d="M68 120 L132 120" fill="none"/><polygon points="84,150 116,150 110,164 90,164" fill="${C.y}"/><polygon points="88,166 100,196 112,166" fill="${C.r}"/>`),
+ nest:()=>{let l='';for(let k=0;k<22;k++){const a=k*16.4*Math.PI/180,b=a+2.0+((k*37)%11)/11*1.5;l+=`<line x1="${(100+86*Math.cos(a)).toFixed(1)}" y1="${(104+56*Math.sin(a)).toFixed(1)}" x2="${(100+86*Math.cos(b)).toFixed(1)}" y2="${(104+56*Math.sin(b)).toFixed(1)}" style="stroke-width:3px"/>`}return S(`<ellipse cx="100" cy="104" rx="86" ry="56" fill="${C.r}"/>${l}<ellipse cx="100" cy="104" rx="86" ry="56" fill="none"/>`)},
+ sprout:()=>S(`<circle cx="40" cy="34" r="16" fill="${C.y}"/>${[0,1,2,3,4,5,6,7].map(i=>`<line x1="${pt(40,34,24,i*45).split(',')[0]}" y1="${pt(40,34,24,i*45).split(',')[1]}" x2="${pt(40,34,34,i*45).split(',')[0]}" y2="${pt(40,34,34,i*45).split(',')[1]}"/>`).join('')}<path d="M20 164 Q100 134 180 164 L180 192 L20 192Z" fill="${C.p}"/><path d="M100 152 C100 122 98 100 100 70" fill="none"/><path d="M100 104 C60 108 42 84 46 56 C82 54 102 74 100 104Z" fill="${C.g}"/><path d="M100 80 C130 84 160 70 164 38 C130 34 102 52 100 80Z" fill="${C.g}"/>`),
+ moon:()=>S(`<circle cx="112" cy="86" r="66" fill="${C.y}"/><circle cx="90" cy="68" r="13" fill="${C.w}"/><circle cx="138" cy="58" r="8" fill="${C.w}"/><circle cx="132" cy="112" r="14" fill="${C.w}"/><circle cx="96" cy="114" r="6" fill="${C.w}"/><path d="M8 172 Q100 150 192 172 L192 194 L8 194Z" fill="${C.w}"/><line x1="70" y1="134" x2="70" y2="116"/><rect x="70" y="108" width="16" height="10" fill="${C.r}"/><rect x="48" y="134" width="44" height="22" fill="${C.b}"/><line x1="54" y1="156" x2="38" y2="174"/><line x1="86" y1="156" x2="102" y2="174"/>`),
+ steps:()=>S(`${[40,70,100,130,160].map((h,i)=>`<rect x="${14+i*34}" y="${184-h}" width="28" height="${h}" fill="${[C.y,C.p,C.g,C.b,C.r][i]}"/>`).join('')}<line x1="24" y1="104" x2="160" y2="34"/><polygon points="178,24 150,28 164,54" fill="${C.w}"/>`),
+ star:()=>S(`<polygon points="${burst(100,100,14,92,66)}" fill="${C.r}"/><polygon points="${star(100,102,50)}" fill="${C.y}"/>`)
+};
+const spark=(f)=>`<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 2 L25 15 L38 20 L25 25 L20 38 L15 25 L2 20 L15 15Z" fill="${f}"/></svg>`;
+const stampSvg=(txt)=>`<svg viewBox="0 0 120 120" aria-hidden="true"><polygon points="${burst(60,60,12,54,40)}" fill="${C.y}"/><text x="60" y="70" text-anchor="middle" font-size="${String(txt).length>3?22:30}" fill="${C.k}" style="font-family:Impact,'Arial Black',sans-serif;stroke:none;font-weight:900">${txt}</text></svg>`;
+
+/* ---------- 內容（均經網路查證，見檔頭來源） ---------- */
+const EV=[
+ {y:'1949',d:'10月1日',t:'開國大典',s:'毛澤東在北京天安門城樓宣告中華人民共和國中央人民政府成立。',ic:'flag'},
+ {y:'1964',d:'10月16日',t:'首顆原子彈爆炸成功',s:'在新疆羅布泊試驗成功，中國依靠自身力量掌握原子彈技術。',ic:'atom'},
+ {y:'1970',d:'4月24日',t:'東方紅一號升空',s:'中國第一顆人造地球衛星發射成功，開啟航天時代。',ic:'sat'},
+ {y:'1971',d:'10月25日',t:'恢復聯合國席位',s:'聯大通過第2758號決議，恢復中華人民共和國在聯合國的合法席位。',ic:'globe'},
+ {y:'1978',d:'12月18–22日',t:'改革開放啟航',s:'中共十一屆三中全會召開，確定改革開放的基本國策。',ic:'gear'},
+ {y:'1997',d:'7月1日',t:'香港回歸',s:'中國政府對香港恢復行使主權，香港特別行政區成立。',ic:'flower'},
+ {y:'2001',d:'12月11日',t:'加入世貿組織',s:'中國正式成為世界貿易組織第143個成員。',ic:'boxes'},
+ {y:'2003',d:'10月15日',t:'神舟五號載人飛天',s:'航天員楊利偉進入太空，中國首次載人航天飛行成功。',ic:'rocket'},
+ {y:'2008',d:'8月8日 開幕',t:'北京奧運會',s:'第29屆夏季奧林匹克運動會在北京舉行。',ic:'nest'},
+ {y:'2021',d:'2月25日',t:'脫貧攻堅全面勝利',s:'9899萬農村貧困人口全部脫貧，832個貧困縣全部摘帽。',ic:'sprout'},
+ {y:'2024',d:'6月25日',t:'嫦娥六號月背採樣返回',s:'世界首次月球背面採樣返回，帶回1953.3克月壤。',ic:'moon'},
+ {y:'2026',d:'3月12日',t:'「十五五」規劃開局',s:'全國人大批准「十五五」規劃綱要；2025年GDP已突破140萬億元。',ic:'steps'}
+];
+const ACC=[C.r,C.b,C.g];
+const SC=[];
+SC.push({kind:'intro',D:2.2,exit:true,y:'77',d:'週年',t:'新中國大事記',s:'30秒快閃・1949 → 2026',ic:'star',ac:C.r,n:'77',C:1.0,W:.3,m:.3,impX:.8});
+EV.forEach((e,i)=>SC.push(Object.assign({kind:'ev',D:2.1,exit:true,ac:ACC[i%3],n:(i+1)+'/12',C:1.0,W:.3,m:.28,impX:.75,hi:[0,5,9,11].includes(i)},e)));
+SC.push({kind:'out',D:2.6,exit:false,y:'77',d:'2026',t:'慶祝中華人民共和國成立77週年',s:'1949年10月1日 → 2026年10月1日',ic:'star',ac:C.b,n:'77',C:1.0,W:.35,m:.28,impX:.8,hi:true});
+let acc0=0;SC.forEach((s,i)=>{s.i=i;s.start=acc0;acc0+=s.D;s.dir=i%2?-1:1});
+const TOTAL=acc0; // 30.0
+
+function cardHTML(s,staticMode){
+  const chipBg=s.ac===C.b?C.p:C.y;
+  return `<div class="card" style="--ac:${s.ac};--hl:${chipBg}">
+    <div class="row1"><div class="yr">${[...s.y].map(ch=>`<span>${ch}</span>`).join('')}</div><div class="chip" style="background:${chipBg}">${s.d}</div></div>
+    <div class="body"><div class="ico">${ICON[s.ic]()}</div><div class="txt"><h2><span class="hl">${s.t}</span></h2><p>${s.s}</p></div></div>
+    ${staticMode?'':`<div class="stamp">${stampSvg(s.n)}</div><i class="sp sp1">${spark(C.w)}</i><i class="sp sp2">${spark(C.y)}</i><i class="sp sp3">${spark(C.w)}</i>`}
+  </div>`;
+}
+
+/* ---------- 減少動態：靜態清單 ---------- */
+if(RM){
+  document.body.classList.add('rm');
+  const L=document.getElementById('list');
+  L.innerHTML=`<h1><span>新中國77週年大事記</span></h1><p style="text-align:center;margin-bottom:28px"><button id="go" type="button" style="font:inherit;font-weight:900;font-size:20px;background:#FF0000;color:#000;border:6.2px solid #000;box-shadow:5px 5px 0 #000;padding:10px 22px;cursor:pointer">▶ 播放30秒動畫</button><br><small style="font-weight:700;background:#FFFFFF;padding:2px 8px">偵測到系統已開啟「減少動態」，預設為靜態版</small></p>`+SC.filter(s=>s.kind==='ev').map(s=>`<article>${cardHTML(s,true)}</article>`).join('')+
+   `<footer>資料來源：新華社、人民網、中國政府網、國家統計局、國家航天局、維基百科等公開資料。</footer>`;
+}
+
+/* ---------- 緩動與時間重映射 ---------- */
+function bez(x){ // cubic-bezier(0.227, 1.1, 0.483, 0.99)
+  const x1=.227,y1=1.1,x2=.483,y2=.99;
+  if(x<=0)return 0; if(x>=1)return 1;
+  let t=x;
+  for(let i=0;i<8;i++){
+    const cx=3*x1*t*(1-t)*(1-t)+3*x2*t*t*(1-t)+t*t*t-x;
+    const d=3*x1*(1-t)*(1-t)+6*(x2-x1)*t*(1-t)+3*(1-x2)*t*t;
+    if(Math.abs(cx)<1e-5)break; t-=cx/(d||1e-6);
+  }
+  t=Math.min(Math.max(t,0),1);
+  return 3*y1*t*(1-t)*(1-t)+3*y2*t*t*(1-t)+t*t*t;
+}
+const eIO5=p=>p<.5?16*p**5:1-Math.pow(-2*p+2,5)/2; // easeInOutQuint
+const clamp=(v,a,b)=>Math.min(Math.max(v,a),b);
+function ramp(D,Cc,W,m){ // 子彈時間：快—慢—快
+  const h=.005,N=Math.round(D/h),tab=new Float32Array(N+1);let a=0;
+  const sp=x=>1-(1-m)*Math.exp(-(((x-Cc)/W)**2));
+  for(let i=1;i<=N;i++){a+=h*sp((i-.5)*h);tab[i]=a}
+  return {T:tab[N],sp,ts(x){const f=clamp(x/h,0,N),i=Math.floor(f);return i>=N?tab[N]:tab[i]+(tab[i+1]-tab[i])*(f-i)}};
+}
+
+/* ---------- 建立場景 ---------- */
+const stage=document.getElementById('stage');
+const LINES=[[10,46,0],[24,62,1],[38,38,0],[52,70,0],[66,50,1],[80,58,0],[92,40,1]];
+SC.forEach(s=>{
+  const yel=s.i%2===0;
+  const sec=document.createElement('section');
+  sec.className='scene';
+  sec.style.cssText=`--bgc:${yel?C.y:C.p};--dc:${yel?C.p:C.y};--rc:${yel?C.w:C.y};z-index:${s.i+1}`;
+  sec.innerHTML=`<div class="bg"></div><div class="rays"></div><div class="ghost">${s.y}</div>
+   <div class="cam"><div class="exit">${cardHTML(s,false)}</div></div>
+   <div class="lines">${LINES.map(l=>`<b class="${l[2]?'wh':''}" style="top:${l[0]}%;width:${l[1]}vw"></b>`).join('')}</div>`;
+  stage.appendChild(sec);
+  s.el=sec;s.vis=false;s.f={};
+  s.R=ramp(s.D,s.C,s.W,s.m);
+  s.IMP=s.R.ts(s.impX);
+  const q=sel=>sec.querySelector(sel);
+  s.E={bg:q('.bg'),rays:q('.rays'),ghost:q('.ghost'),cam:q('.cam'),exit:q('.exit'),card:q('.card'),
+    yr:[...sec.querySelectorAll('.yr span')],row:q('.row1'),chip:q('.chip'),ico:q('.ico'),h2:q('h2'),hl:q('.hl'),p:q('.txt p'),
+    stamp:q('.stamp'),sp:[...sec.querySelectorAll('.sp')],lines:[...sec.querySelectorAll('.lines b')]};
+});
+
+/* ---------- 動作基元 ---------- */
+function pop(el,l,o){
+  const A=o.A===undefined?.09:o.A,d=o.d||.323;
+  if(l<-A){el.style.visibility='hidden';return}
+  el.style.visibility='visible';
+  let p,sx=1,sy=1,q=0;
+  if(l<0){p=-.075*Math.sin((l+A)/A*Math.PI/2)}           // 預備動作 25%
+  else{
+    q=Math.min(l/d,1);
+    p=-.075+1.075*bez(q);
+    const v=(bez(Math.min(q+.03,1))-bez(Math.max(q-.03,0)))/.06;
+    const st=.3*Math.min(v/2.4,1);                         // 擠壓拉伸 30%
+    if(o.hx){sx=1+st*.55;sy=1-st*.2}else{sy=1+st*.55;sx=1-st*.2}
+    if(q>.78){const k=(q-.78)/.22,sq=.105*Math.sin(k*Math.PI);if(o.hx){sx-=sq*.4;sy+=sq*.3}else{sy-=sq*.45;sx+=sq*.3}}
+    if(l>d){const u=l-d;p+=.036*Math.exp(-u*9)*Math.sin(u*42)} // 過衝回彈 12%
+  }
+  const k=1-p,s0=o.s0===undefined?1:o.s0;
+  const ax=(o.ax||0)*Math.sin(Math.PI*clamp(q,0,1));
+  const s=s0+(1-s0)*clamp(p,0,1.04);
+  const fr=o.fr&&l>.2?o.fr*.4*Math.exp(-(l-.2)*5)*Math.sin((l-.2)*26):0; // 跟隨重疊 40%
+  el.style.transform=`translate(${((o.dx||0)*k+ax).toFixed(1)}px,${((o.dy||0)*k).toFixed(1)}px) rotate(${((o.r0||0)+(o.rot||0)*k+fr).toFixed(2)}deg) scale(${(s*sx).toFixed(3)},${(s*sy).toFixed(3)})`;
+}
+function exitFx(el,l,dir,W,H){
+  const A=.08;
+  if(l<-A){el.style.transform='none';return}
+  let p,vn=0;
+  if(l<0){p=-.075*Math.sin((l+A)/A*Math.PI/2)}
+  else{const q=Math.min(l/.323,1);p=-.075+1.075*q**4;vn=Math.min(4*q**3/4,1)}
+  const pc=clamp(p,0,1);
+  el.style.transform=`translate(${(-dir*W*1.3*p).toFixed(1)}px,${(-H*.32*p-H*.1*Math.sin(Math.PI*pc)).toFixed(1)}px) rotate(${(-dir*12*p).toFixed(2)}deg) scale(${(1+.21*vn).toFixed(3)},${(1-.075*vn).toFixed(3)})`;
+}
+
+/* ---------- 紙屑 ---------- */
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+let parts=[],burstDone=false;
+const CONF=[C.r,C.b,C.y,C.w,C.g,C.p];
+function sizeCv(){const d=Math.min(devicePixelRatio||1,2);cv.width=innerWidth*d;cv.height=innerHeight*d;cx.setTransform(d,0,0,d,0,0)}
+addEventListener('resize',sizeCv);sizeCv();
+function launch(){
+  const W=innerWidth,H=innerHeight;
+  for(let i=0;i<120;i++){
+    const a=-Math.PI/2+(Math.random()-.5)*1.9,v=(.6+Math.random()*.75)*H*1.05;
+    parts.push({x:W/2+(Math.random()-.5)*W*.3,y:H*1.0,vx:Math.cos(a)*v*.8,vy:Math.sin(a)*v,r:6+Math.random()*9,a:Math.random()*6,va:(Math.random()-.5)*10,c:CONF[i%CONF.length],sh:i%3});
+  }
+}
+function stepConf(dt){
+  cx.clearRect(0,0,innerWidth,innerHeight);
+  if(!parts.length)return;
+  const G=innerHeight*1.5;
+  parts=parts.filter(p=>p.y<innerHeight+40);
+  cx.lineWidth=3;cx.strokeStyle=C.k;
+  for(const p of parts){
+    p.vy+=G*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.a+=p.va*dt;p.vx*=1-.6*dt;
+    cx.save();cx.translate(p.x,p.y);cx.rotate(p.a);cx.fillStyle=p.c;cx.beginPath();
+    if(p.sh===0)cx.rect(-p.r,-p.r*.6,p.r*2,p.r*1.2);
+    else if(p.sh===1)cx.arc(0,0,p.r*.8,0,6.283);
+    else{cx.moveTo(0,-p.r);cx.lineTo(p.r,p.r*.8);cx.lineTo(-p.r,p.r*.8);cx.closePath()}
+    cx.fill();cx.stroke();cx.restore();
+  }
+}
+
+/* ---------- 聲音（Web Audio 即時合成；預設靜音） ---------- */
+let ac=null,master,musicG,sfxG,PULSE,noiseBuf,on=false,timer=null,nextT=0,step=0;
+const SPB=60/111,SD=SPB/4;
+const SCALE=[0,2,3,5,7,9,10,12,14,15,17,19]; // E 多利安：E F# G A B C# D
+const LEAD=[7,-1,4,-1,5,-1,4,-1,2,-1,3,-1,4,-1,-1,-1, 7,-1,9,-1,8,-1,7,-1,4,-1,5,-1,3,-1,2,-1];
+const BASS=[40,-1,-1,-1,40,-1,52,-1,40,-1,-1,-1,40,-1,52,-1, 45,-1,-1,-1,45,-1,57,-1,47,-1,-1,-1,43,-1,-1,-1];
+const mf=m=>440*Math.pow(2,(m-69)/12);
+function initAudio(){
+  if(ac)return;
+  ac=new (window.AudioContext||window.webkitAudioContext)();
+  master=ac.createGain();master.gain.value=.7;master.connect(ac.destination);
+  musicG=ac.createGain();musicG.gain.value=.0;musicG.connect(master);
+  sfxG=ac.createGain();sfxG.gain.value=.55;sfxG.connect(master);
+  const N=24,re=new Float32Array(N),im=new Float32Array(N);
+  for(let n=1;n<N;n++)im[n]=2/(n*Math.PI)*Math.sin(n*Math.PI*.25);
+  PULSE=ac.createPeriodicWave(re,im);
+  noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);
+  const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+}
+function tone(f,t,d,type,g,dest,f2){
+  const o=ac.createOscillator(),gn=ac.createGain();
+  if(type==='pulse')o.setPeriodicWave(PULSE);else o.type=type;
+  o.frequency.setValueAtTime(f,t);if(f2)o.frequency.exponentialRampToValueAtTime(f2,t+d);
+  gn.gain.setValueAtTime(.0001,t);gn.gain.linearRampToValueAtTime(g,t+.006);gn.gain.exponentialRampToValueAtTime(.0001,t+d);
+  o.connect(gn);gn.connect(dest);o.start(t);o.stop(t+d+.03);
+}
+function noise(t,d,type,f,g,dest,f2){
+  const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),gn=ac.createGain();
+  s.buffer=noiseBuf;fl.type=type;fl.frequency.setValueAtTime(f,t);if(f2)fl.frequency.exponentialRampToValueAtTime(f2,t+d);fl.Q.value=type==='bandpass'?1.4:.7;
+  gn.gain.setValueAtTime(.0001,t);gn.gain.linearRampToValueAtTime(g,t+.01);gn.gain.exponentialRampToValueAtTime(.0001,t+d);
+  s.connect(fl);fl.connect(gn);gn.connect(dest);s.start(t);s.stop(t+d+.03);
+}
+function schedule(n,t){
+  const a=n%32,b=n%16;
+  if(LEAD[a]>=0)tone(mf(64+SCALE[LEAD[a]]),t,SD*1.7,'pulse',.5,musicG);
+  if(BASS[a]>=0)tone(mf(BASS[a]),t,SD*2.4,'triangle',.8,musicG);
+  if(b===0||b===10)noise(t,.09,'lowpass',240,.8,musicG);
+  else if(b===4||b===12)noise(t,.07,'highpass',1800,.4,musicG);
+  else if(b%2===0)noise(t,.03,'highpass',7000,.18,musicG);
+}
+function pump(){
+  while(nextT<ac.currentTime+.12){schedule(step,nextT);nextT+=SD;step++}
+}
+function sfx(kind){
+  if(!on||!ac)return;
+  const t=ac.currentTime+.01;
+  if(kind==='whoosh')noise(t,.26,'bandpass',500,.7,sfxG,2600);
+  else if(kind==='land'){tone(150,t,.18,'sine',.9,sfxG,45);noise(t,.05,'lowpass',900,.4,sfxG)}
+  else if(kind==='sparkle')[1319,1760,2093,2637].forEach((f,i)=>tone(f,t+i*.055,.14,'triangle',.28,sfxG));
+  else if(kind==='ping')tone(1568,t,.5,'sine',.4,sfxG);
+  else if(kind==='click')tone(880,t,.05,'square',.18,sfxG,440);
+}
+const snd=document.getElementById('snd'),sndTxt=snd.querySelector('span'),wv=document.getElementById('wv');
+function setSound(v){
+  on=v;snd.setAttribute('aria-pressed',String(v));sndTxt.textContent=v?'聲音：開':'聲音：關';wv.style.display=v?'':'none';
+  if(v){
+    initAudio();ac.resume();
+    musicG.gain.cancelScheduledValues(ac.currentTime);musicG.gain.setTargetAtTime(.17,ac.currentTime,.05);
+    nextT=ac.currentTime+.06;step=0;clearInterval(timer);timer=setInterval(pump,25);pump();
+    sfx('click');
+  }else if(ac){
+    musicG.gain.setTargetAtTime(0,ac.currentTime,.04);
+    setTimeout(()=>{if(!on){clearInterval(timer);timer=null}},300);
+  }
+}
+wv.style.display='none';
+snd.addEventListener('click',()=>setSound(!on));
+
+/* ---------- 主渲染 ---------- */
+const srEl=document.getElementById('sr'),bar=document.querySelector('#bar i'),rep=document.getElementById('rep');
+function render(t,dt){
+  const W=innerWidth,H=innerHeight;
+  for(const s of SC){
+    const x=t-s.start;
+    if(x<0||x>s.D+.45){if(s.vis){s.el.style.visibility='hidden';s.vis=false}continue}
+    if(!s.vis){s.el.style.visibility='visible';s.vis=true}
+    const E=s.E,R=s.R,T=R.T,dir=s.dir,xx=Math.min(x,s.D),ts=R.ts(xx),loc=u=>ts-u;
+    if(!s.f.start){s.f.start=1;srEl.textContent=s.y+' '+s.t+'。'+s.s;sfx('whoosh')}
+    // 場景轉場：圓弧擦除
+    if(s.i>0){const q=Math.min(x/.42,1);s.el.style.clipPath=q<1?`circle(${(bez(q)*150).toFixed(1)}% at ${dir>0?'0%':'100%'} 100%)`:'none'}
+    // 升降搖臂：低角度 → 俯瞰，沿弧線
+    const pr=clamp(ts/T,0,1),c=eIO5(pr),AM=.95;
+    const camX=dir*Math.sin(pr*Math.PI)*W*.03*AM, camY=(-.06+.12*c)*H*AM;
+    const tilt=(14-20*c)*AM, orb=.24*10*dir*Math.sin(pr*Math.PI*2), sc=1.07-.1*c;
+    E.cam.style.transform=`translate3d(${camX.toFixed(1)}px,${camY.toFixed(1)}px,0) rotateX(${tilt.toFixed(2)}deg) rotateY(${orb.toFixed(2)}deg) scale(${sc.toFixed(3)})`;
+    // 視差層
+    E.bg.style.transform=`translate(${(-camX*.5-pr*30*dir).toFixed(1)}px,${(camY*.3+pr*24).toFixed(1)}px)`;
+    E.rays.style.transform=`rotate(${(dir*(pr*16-8)).toFixed(2)}deg)`;
+    E.ghost.style.transform=`translate(-50%,-50%) translate(${(camX*-.8+dir*pr*-40).toFixed(1)}px,${(camY*.6).toFixed(1)}px) rotate(${(dir*(-4+pr*5)).toFixed(2)}deg)`;
+    // 進場（52ms 錯峰）
+    pop(E.card,loc(0),{dx:dir*W*.3,dy:H*.55,s0:.55,rot:-dir*8,r0:-1.2,ax:dir*W*.08});
+    E.yr.forEach((el,i)=>pop(el,loc(.06+i*.052),{dy:H*.2,s0:.3,rot:(i%2?1:-1)*14}));
+    pop(E.chip,loc(.2),{dx:dir*60,dy:-30,s0:.2,rot:dir*20});
+    pop(E.ico,loc(.14),{dx:-dir*40,dy:60,s0:.15,rot:-dir*25,fr:14});
+    pop(E.h2,loc(.30),{dx:-dir*80,hx:1});
+    pop(E.p,loc(.40),{dx:-dir*60,hx:1});
+    // 關鍵瞬間（慢放）：落定 / 網點膨脹 / 印章 / 星光 / 高光掃過
+    const il=ts-s.IMP;
+    if(il>=0&&!s.f.imp){s.f.imp=1;sfx('land');if(s.hi)setTimeout(()=>sfx(s.kind==='out'?'ping':'sparkle'),80);if(s.kind==='out'&&!burstDone){burstDone=true;launch()}}
+    const th=il>0?Math.exp(-il*5)*Math.cos(il*18):0;
+    E.row.style.transform=`scale(${(1+.05*th).toFixed(3)},${(1-.07*th).toFixed(3)})`;
+    E.row.style.transformOrigin='50% 100%';
+    E.ico.style.setProperty('--r2',(.5+2.6*bez(clamp(il/.55,0,1))).toFixed(2)+'px');
+    E.hl.style.setProperty('--w2',(100*bez(clamp((il-.1)/.4,0,1))).toFixed(1)+'%');
+    if(il>-.05)pop(E.stamp,il,{A:0,d:.42,s0:.15,rot:30,r0:10});else E.stamp.style.visibility='hidden';
+    E.sp.forEach((el,i)=>{
+      const l=il-.04-i*.052;
+      if(l<0){el.style.visibility='hidden';return}
+      const q=bez(clamp(l/.4,0,1)),tw=.85+.15*Math.sin(ts*10+i*2);
+      el.style.visibility='visible';
+      el.style.transform=`rotate(${(l*60*(i%2?-1:1)).toFixed(1)}deg) scale(${(q*tw*(1+.2*th)).toFixed(3)})`;
+    });
+    // 速度線
+    E.lines.forEach((b,i)=>{
+      const q1=(ts-i*.052)/.3,q2=s.exit?(ts-(T-.323)-.03*i)/.3:-1;
+      let v='hidden',tx=0;
+      if(q1>0&&q1<1){v='visible';tx=dir*(-1.15+2.3*q1)*W}
+      else if(q2>0&&q2<1){v='visible';tx=-dir*(-1.15+2.3*q2)*W}
+      b.style.visibility=v;if(v==='visible')b.style.transform=`translateX(${tx.toFixed(1)}px)`;
+    });
+    // 退場
+    if(s.exit)exitFx(E.exit,ts-(T-.323),dir,W,H);else E.exit.style.transform='none';
+    // 尾場紙屑（跟隨子彈時間）
+    if(s.kind==='out'&&dt!==null)stepConf(dt*R.sp(xx));
+  }
+}
+function loop(now){
+  const dt=Math.min((now-last)/1000,.1);last=now;
+  if(!done){t+=dt;if(t>=TOTAL){t=TOTAL;done=true;rep.textContent='再看一次'}}
+  render(t,done&&!parts.length?null:dt);
+  bar.style.width=(t/TOTAL*100).toFixed(2)+'%';
+  requestAnimationFrame(loop);
+}
+let t=0,last=performance.now(),done=false;
+rep.addEventListener('click',()=>{
+  sfx('click');t=0;done=false;parts=[];burstDone=false;cx.clearRect(0,0,innerWidth,innerHeight);rep.textContent='重播';
+  SC.forEach(s=>{s.f={}});
+});
+function startAnim(){document.body.classList.remove('rm');window.scrollTo(0,0);t=0;done=false;requestAnimationFrame(n=>{last=n;requestAnimationFrame(loop)})}
+if(!RM)startAnim();else document.getElementById('go').addEventListener('click',startAnim);
+})();
+</script>
+<noscript>此頁需要啟用 JavaScript 才能播放動畫。</noscript>
+</body>
+</html>

@@ -4,7 +4,7 @@ import { clamp } from '../engine/util';
 import type { RenderOpts } from './chip';
 import { Noise, Svf, foldTail, freeverb, master, newStereo, noteSpan, panGains, removeMean, yieldNow, type Stereo } from './dsp';
 import { CALIBRATION } from './calibration';
-import { ensureSamplesFor, sampledDrum, sampledModel } from './sampled';
+import { ROLE_MIX, SEND, ensureSamplesFor, sampledDrum, sampledModel } from './sampled';
 import { mtof } from './theory';
 import type { Song, TrackRole } from './types';
 
@@ -656,9 +656,6 @@ function drum(buf: Float32Array, sr: number, start: number, note: number, vel: n
 }
 
 // ---------- 主渲染 ----------
-/** 取樣音色已做響度校正，這裡只調整各聲部之間的相對大小 */
-const ROLE_MIX: Record<TrackRole, number> = { lead: 1, counter: 0.85, arp: 0.8, bass: 0.75, pad: 0.9, chord: 0.7, perc: 1 };
-const SEND: Record<TrackRole, number> = { lead: 0.3, arp: 0.34, bass: 0.04, pad: 0.55, chord: 0.28, counter: 0.32, perc: 0.1 };
 
 export async function renderGm(song: Song, opts: RenderOpts): Promise<Stereo> {
   const sr = opts.sr;

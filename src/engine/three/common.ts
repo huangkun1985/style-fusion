@@ -39,7 +39,7 @@ export function buildRig(look: Look, small: boolean): THREE.Group {
   const P = look.pal;
   const sky = new THREE.Color(lighten(P.light, 0));
   const ground = new THREE.Color(darken(P.bg2, 0.3));
-  const size = small ? 512 : 1024;
+  const size = small ? 1024 : 2048;
   const dir = (color: string | number, intensity: number, pos: [number, number, number], shadow: boolean) => {
     const l = new THREE.DirectionalLight(color, intensity);
     l.position.set(...pos);
@@ -53,9 +53,10 @@ export function buildRig(look: Look, small: boolean): THREE.Group {
       c.bottom = -9;
       c.near = 1;
       c.far = 40;
-      l.shadow.bias = -0.0012;
-      l.shadow.normalBias = 0.03;
-      l.shadow.radius = 3;
+      // 閃爍的根因（見 CHANGELOG）：貼近光線方向的側面有「陰影痘」，條紋隨相機與物件移動每幀跳動；加大法線偏移、改柔邊過濾
+      l.shadow.bias = -0.0015;
+      l.shadow.normalBias = 0.09;
+      l.shadow.radius = 4;
     }
     g.add(l);
     return l;

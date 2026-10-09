@@ -660,6 +660,87 @@ const BG: Record<string, (b: B) => void> = {
       ctx.fill();
     }
   },
+  // 軟木板：底色加上深淺不一的小顆粒，便利貼貼在上面的感覺
+  cork: (b) => {
+    fillAll(b, b.P.bg);
+    const { ctx } = b;
+    const step = 7;
+    const cols = [rgba(darken(b.P.bg, 0.3), 0.32), rgba(b.P.bg2, 0.5), rgba(darken(b.P.bg, 0.12), 0.45)];
+    for (let k = 0; k < cols.length; k++) {
+      ctx.fillStyle = cols[k];
+      ctx.beginPath();
+      for (let y = b.Y0; y < b.Y0 + b.H; y += step) {
+        for (let x = b.X0; x < b.X0 + b.W; x += step) {
+          const gx = Math.floor(x / step);
+          const gy = Math.floor(y / step);
+          if (hash(gx, gy, 40 + k) > 0.34) continue;
+          const r = 0.8 + hash(gx, gy, 50 + k) * 1.9;
+          const px = x + hash(gx, gy, 60 + k) * step;
+          const py = y + hash(gx, gy, 70 + k) * step;
+          ctx.moveTo(px + r, py);
+          ctx.arc(px, py, r, 0, TAU);
+        }
+      }
+      ctx.fill();
+    }
+  },
+  // 剪報散落：桌面上散落著大小不一的紙片、報紙與色紙（有文字行與網點）
+  scraps: (b) => {
+    fillAll(b, b.P.bg);
+    const { ctx } = b;
+    const roles: (keyof Palette)[] = ['light', 'card', 'bg2', 'a', 'p', 's', 'light', 'card', 'q'];
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const w = 90 + hash(i, 1, 81) * 150;
+      const h = 60 + hash(i, 2, 81) * 120;
+      const x = b.X0 + hash(i, 3, 81) * b.W;
+      const y = b.Y0 + hash(i, 4, 81) * b.H;
+      const rot = (hash(i, 5, 81) - 0.5) * 0.7;
+      const col = b.P[roles[i % roles.length]];
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.shadowColor = 'rgba(30,20,10,0.22)';
+      ctx.shadowBlur = 5;
+      ctx.shadowOffsetY = 2;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      // 撕邊：每個角落與邊中點略有偏移
+      const J = (k: number) => (hash(i, k, 82) - 0.5) * 7;
+      ctx.moveTo(-w / 2 + J(1), -h / 2 + J(2));
+      ctx.lineTo(J(3), -h / 2 + J(4));
+      ctx.lineTo(w / 2 + J(5), -h / 2 + J(6));
+      ctx.lineTo(w / 2 + J(7), J(8));
+      ctx.lineTo(w / 2 + J(9), h / 2 + J(10));
+      ctx.lineTo(J(11), h / 2 + J(12));
+      ctx.lineTo(-w / 2 + J(13), h / 2 + J(14));
+      ctx.lineTo(-w / 2 + J(15), J(16));
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+      ctx.clip();
+      if (hash(i, 6, 81) < 0.6) {
+        // 文字行
+        ctx.fillStyle = rgba(b.P.ink, 0.2);
+        for (let ly = -h / 2 + 10; ly < h / 2 - 8; ly += 8) {
+          const len = w * (0.5 + hash(i, Math.round(ly), 83) * 0.4);
+          ctx.fillRect(-w / 2 + 8, ly, len, 3);
+        }
+      } else {
+        // 網點
+        ctx.fillStyle = rgba(b.P.ink, 0.16);
+        ctx.beginPath();
+        for (let ly = -h / 2 + 5; ly < h / 2; ly += 8) {
+          for (let lx = -w / 2 + 5; lx < w / 2; lx += 8) {
+            ctx.moveTo(lx + 2, ly);
+            ctx.arc(lx, ly, 2, 0, TAU);
+          }
+        }
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  },
   newsprint: (b) => {
     fillAll(b, b.P.bg);
     const { ctx } = b;

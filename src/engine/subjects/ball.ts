@@ -5,19 +5,19 @@ import type { Env } from '../env';
 import { clamp, lerp } from '../util';
 import { contactShadow, ground, type Subject } from './types';
 
-const G = 112;
-const R = 26;
-const H0 = 205;
+export const G = 112;
+export const R = 26;
+export const H0 = 205;
 const HS = [140, 88, 50, 24, 9];
-const ACTIVE = 0.88;
+export const ACTIVE = 0.88;
 
-interface Seg {
+export interface Seg {
   a: number;
   b: number;
   h: number;
   half: boolean;
 }
-const SEGS: Seg[] = (() => {
+export const SEGS: Seg[] = (() => {
   const dur = [Math.sqrt(H0), ...HS.map((h) => 2 * Math.sqrt(h))];
   const total = dur.reduce((s, d) => s + d, 0);
   const out: Seg[] = [];
@@ -30,7 +30,7 @@ const SEGS: Seg[] = (() => {
   return out;
 })();
 
-function height(M: MotionCtx, u: number): number {
+export function height(M: MotionCtx, u: number): number {
   for (const s of SEGS) {
     if (u >= s.a && u <= s.b) {
       const w = (u - s.a) / (s.b - s.a);
@@ -42,7 +42,7 @@ function height(M: MotionCtx, u: number): number {
   }
   return 0;
 }
-function xpos(M: MotionCtx, u: number, env: Env): number {
+export function xpos(M: MotionCtx, u: number, env: Env): number {
   const X = env.Wu / 2 + 40;
   const p = lerp(u, M.io(u), 0.25 * (1 - clamp(M.mv.arc)));
   return -X + 2 * X * p;

@@ -36,6 +36,9 @@ export function resolveMat(look: Look): ResolvedMat {
       return 'pearl';
     case 'glass':
       return 'glass';
+    case 'paper':
+    case 'sticky':
+      return 'paper';
     case 'silhouette':
       return 'basic';
     case 'none':
@@ -197,12 +200,12 @@ export class MatKit {
   }
 
   /** 一個完整的物件：本體 + 描邊／線條。回傳的 Group 可直接擺位與縮放 */
-  mesh(geo: THREE.BufferGeometry, color: string, o: { outline?: boolean; shadow?: boolean } = {}): THREE.Group {
+  mesh(geo: THREE.BufferGeometry, color: string, o: { outline?: boolean; shadow?: boolean; receive?: boolean } = {}): THREE.Group {
     const g = new THREE.Group();
     geo = this.prep(geo);
     const body = new THREE.Mesh(geo, this.material(color));
     body.castShadow = o.shadow !== false && this.mat !== 'glass' && this.mat !== 'holo' && this.mat !== 'xray';
-    body.receiveShadow = this.mat !== 'wire' && this.mat !== 'neon';
+    body.receiveShadow = o.receive !== false && this.mat !== 'wire' && this.mat !== 'neon';
     g.add(body);
     if (this.mat === 'wire') g.add(this.fatLines(geo, this.look.strokeColor === 'fill' ? color : this.look.pal.ink, 1.7));
     else if (this.mat === 'neon') g.add(this.fatLines(geo, lighten(color, 0.25), 2.6));
@@ -216,7 +219,11 @@ export class MatKit {
 
   /** 地面接觸陰影（只收陰影，不畫地面） */
   shadowCatcher(size: number): THREE.Mesh {
-    const m = new THREE.Mesh(this.track(new THREE.PlaneGeometry(size, size)), this.track(new THREE.ShadowMaterial({ opacity: this.mat === 'wire' || this.mat === 'neon' ? 0 : 0.24 })));
+    // 接觸陰影平面和展示台頂面在 y=0 共面，會「深度打架」（z-fighting）：相機一動，陰影就一塊一塊忽有忽無。
+    // 抬高一點點並加 polygonOffset 讓它穩定地畫在上面
+    const mat = new THREE.ShadowMaterial({ opacity: this.mat === 'wire' || this.mat === 'neon' ? 0 : 0.24, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const m = new THREE.Mesh(this.track(new THREE.PlaneGeometry(size, size)), this.track(mat));
+    m.position.y = 0.012;
     m.rotation.x = -Math.PI / 2;
     m.receiveShadow = true;
     return m;

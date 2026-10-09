@@ -25,7 +25,7 @@ export interface Subject {
 }
 
 /** 這些背景自帶地面／空間，主體不再畫地面 */
-export const FLOORLESS = new Set(['sunset', 'vapor', 'focus', 'burst', 'swirl', 'hud', 'matrix', 'stars', 'mondrian', 'rays', 'circuit', 'aurora', 'bokeh', 'decofan', 'blinds', 'auspicious', 'brick']);
+export const FLOORLESS = new Set(['sunset', 'vapor', 'focus', 'burst', 'swirl', 'hud', 'matrix', 'stars', 'mondrian', 'rays', 'circuit', 'aurora', 'bokeh', 'decofan', 'blinds', 'auspicious', 'brick', 'cork', 'scraps']);
 
 export function ground(S: Brush, env: Env, G: number) {
   const hw = env.Wu / 2 + 80;

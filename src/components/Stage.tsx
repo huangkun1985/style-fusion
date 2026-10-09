@@ -1,10 +1,11 @@
 // 舞台：主預覽（可四宮格）、軌跡間距疊圖、播放控制、主體切換。
-import { Camera, Grid2x2, Layers, Pause, Play, Spline, StepBack, StepForward, Volume2, VolumeX } from 'lucide-react';
+import { Camera, Grid2x2, Layers, Maximize, Minimize, Pause, Play, Spline, StepBack, StepForward, Upload, Volume2, VolumeX } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { clock } from '../engine/clock';
 import { Renderer, loopSeconds, type FrameSpec } from '../engine/renderer';
 import { SUBJECTS, SUBJECT_ORDER } from '../engine/subjects';
 import { is3D, type SubjectId } from '../engine/types';
+import { themes } from '../engine/themes';
 import { runExport } from '../lib/exporter';
 import { saveBlob, stamp } from '../lib/platform';
 import { toggleSound } from '../lib/sound';
@@ -13,7 +14,14 @@ import { useStore, type Aspect } from '../store/store';
 import { SUBJECT_ICON } from './icons';
 import { IconBtn, Segmented } from './ui';
 
-export const ASPECT: Record<Aspect, number> = { '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '9:16': 9 / 16 };
+/** fit（填滿）的比例會由舞台依實際大小即時更新；導出與截圖用的是更新後的值 */
+export const ASPECT: Record<Aspect, number> = { fit: 16 / 9, '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '9:16': 9 / 16 };
+const ASPECT_LABEL: Record<Aspect, string> = { fit: '填滿', '16:9': '16:9', '4:3': '4:3', '1:1': '1:1', '9:16': '9:16' };
+
+/** 全螢幕展示：App 的快捷鍵（F）與播放列的按鈕都呼叫這個，舞台自己決定進入或離開 */
+export function toggleStageFullscreen() {
+  window.dispatchEvent(new Event('sf:fullscreen'));
+}
 const QUALITY = [1, 0.75, 0.5];
 const MAX_PX = 1920 * 1080;
 
@@ -38,6 +46,60 @@ export function Stage({ fill = false }: { fill?: boolean }) {
   const [glOk, setGlOk] = useState(true);
   const [idle, setIdle] = useState(!clock.playing && clock.t === 0);
   useEffect(() => clock.on(() => setIdle(!clock.playing && clock.t === 0)), []);
+  // 匯入或切換自訂主題時，暫停中的畫面也要馬上重畫
+  useEffect(() => themes.onChange(() => (st.current.dirty = true)), []);
+  // 全螢幕：先立刻把舞台鋪滿整個視窗（任何環境都有效、馬上看得到），同時向瀏覽器要求真正的全螢幕；
+  // 瀏覽器答應了就升級成原生全螢幕。有些內嵌視窗與手機瀏覽器不回應或拒絕，那就維持鋪滿視窗。
+  const [fs, setFs] = useState<'off' | 'native' | 'css'>('off');
+  const fsRef = useRef(fs);
+  fsRef.current = fs;
+  const [ctl, setCtl] = useState(true);
+  const ctlTimer = useRef(0);
+  const showCtl = () => {
+    setCtl(true);
+    window.clearTimeout(ctlTimer.current);
+    ctlTimer.current = window.setTimeout(() => setCtl(false), 2600);
+  };
+  const enterFs = async () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    setFs('css');
+    showCtl();
+    try {
+      await el.requestFullscreen?.();
+    } catch {
+      /* 被拒絕：維持鋪滿視窗 */
+    }
+  };
+  const exitFs = async () => {
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        /* 忽略 */
+      }
+    }
+    setFs('off');
+  };
+  useEffect(() => {
+    const toggle = () => void (fsRef.current === 'off' ? enterFs() : exitFs());
+    const onChange = () => {
+      if (document.fullscreenElement) setFs('native');
+      else setFs((f) => (f === 'native' ? 'off' : f));
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && fsRef.current === 'css') setFs('off');
+    };
+    window.addEventListener('sf:fullscreen', toggle);
+    document.addEventListener('fullscreenchange', onChange);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('sf:fullscreen', toggle);
+      document.removeEventListener('fullscreenchange', onChange);
+      window.removeEventListener('keydown', onKey);
+      window.clearTimeout(ctlTimer.current);
+    };
+  }, []);
   const st = useRef({ look, move, tune, subject, onion, path, grid4, box, quality, dirty: true });
   st.current = { look, move, tune, subject, onion, path, grid4, box, quality, dirty: true };
 
@@ -46,12 +108,18 @@ export function Stage({ fill = false }: { fill?: boolean }) {
     if (!el) return;
     const fit = () => {
       const r = el.getBoundingClientRect();
-      const ar = ASPECT[aspect];
       let w = r.width;
-      let h = w / ar;
-      if (h > r.height) {
-        h = r.height;
-        w = h * ar;
+      let h = r.height;
+      if (aspect === 'fit') {
+        // 填滿：用掉整個舞台區；比例限制在合理範圍，導出才不會變成極端的長條
+        ASPECT.fit = Math.min(2.6, Math.max(0.4, w / Math.max(1, h)));
+      } else {
+        const ar = ASPECT[aspect];
+        h = w / ar;
+        if (h > r.height) {
+          h = r.height;
+          w = h * ar;
+        }
       }
       setBox({ w: Math.max(40, Math.floor(w)), h: Math.max(40, Math.floor(h)) });
     };
@@ -59,7 +127,7 @@ export function Stage({ fill = false }: { fill?: boolean }) {
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [aspect, fill]);
+  }, [aspect, fill, fs]);
 
   useEffect(() => {
     const r = new Renderer(true);
@@ -142,8 +210,14 @@ export function Stage({ fill = false }: { fill?: boolean }) {
   const mixEmpty = !v.length && !m.length;
   return (
     <div className={`flex min-h-0 flex-col gap-2 ${fill ? 'flex-1' : ''}`}>
-      <div ref={wrapRef} className={`relative flex w-full items-center justify-center ${fill ? 'min-h-0 flex-1' : ''}`} style={fill ? undefined : { aspectRatio: String(ASPECT[aspect]), maxHeight: '62vh' }}>
-        <div className="relative overflow-hidden rounded-xl bg-stage shadow-[var(--shadow)] ring-1 ring-line" style={{ width: box.w, height: box.h }}>
+      <div
+        ref={wrapRef}
+        onDoubleClick={() => toggleStageFullscreen()}
+        onMouseMove={fs !== 'off' ? showCtl : undefined}
+        className={`${fs === 'css' ? 'fixed inset-0 z-[70]' : 'relative'} flex w-full items-center justify-center ${fs !== 'off' ? 'bg-black' : fill ? 'min-h-0 flex-1' : ''}`}
+        style={fs !== 'off' ? { cursor: ctl ? undefined : 'none' } : fill ? undefined : aspect === 'fit' ? { height: '62vh' } : { aspectRatio: String(ASPECT[aspect]), maxHeight: '62vh' }}
+      >
+        <div className={`relative overflow-hidden bg-stage ${fs !== 'off' ? '' : 'rounded-xl shadow-[var(--shadow)] ring-1 ring-line'}`} style={{ width: box.w, height: box.h }}>
           {!grid4 ? (
             <>
               <canvas ref={canvasRef} className="block size-full" aria-label="風格混合即時預覽" role="img" />
@@ -181,11 +255,34 @@ export function Stage({ fill = false }: { fill?: boolean }) {
               <span className="text-xs opacity-80">已依系統「減少動態效果」設定，預設暫停</span>
             </button>
           )}
+          {fs !== 'off' && <FsBar visible={ctl} onExit={() => void exitFs()} />}
           {!glOk && <div className="absolute left-2 bottom-2 rounded bg-danger/90 px-2 py-1 text-[11px] text-white">此瀏覽器不支援 WebGL2，後期特效已停用</div>}
         </div>
       </div>
       <Transport />
       <SubjectBar />
+    </div>
+  );
+}
+
+/** 全螢幕時浮在畫面下方的簡易控制：播放／暫停、聲音、離開；滑鼠不動 2.6 秒後淡出 */
+function FsBar({ visible, onExit }: { visible: boolean; onExit: () => void }) {
+  const soundOn = useStore((s) => s.audio.on);
+  const [playing, setPlaying] = useState(clock.playing);
+  useEffect(() => clock.on(() => setPlaying(clock.playing)), []);
+  return (
+    <div className={`absolute inset-x-0 bottom-4 flex justify-center transition-opacity duration-300 ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
+      <div className="flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 text-white backdrop-blur">
+        <button type="button" aria-label={playing ? '暫停' : '播放'} title={playing ? '暫停（空白鍵）' : '播放（空白鍵）'} onClick={() => clock.play()} className="flex size-9 items-center justify-center rounded-full hover:bg-white/15">
+          {playing ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+        <button type="button" aria-label={soundOn ? '關閉聲音' : '開啟聲音'} title={soundOn ? '關閉聲音（M）' : '開啟聲音（M）'} onClick={() => void toggleSound()} className="flex size-9 items-center justify-center rounded-full hover:bg-white/15">
+          {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
+        </button>
+        <button type="button" aria-label="離開全螢幕" title="離開全螢幕（Esc 或 F）" onClick={onExit} className="flex size-9 items-center justify-center rounded-full hover:bg-white/15">
+          <Minimize size={18} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -209,6 +306,7 @@ function Transport() {
   const soundOn = useStore((s) => s.audio.on);
   const set = useStore((s) => s.set);
   const showToast = useStore((s) => s.showToast);
+  useStore((s) => s.themeRev); // 自訂主題的循環秒數會變
   const L = loopSeconds(SUBJECTS[subject], move, tune);
   const rangeRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLSpanElement>(null);
@@ -308,12 +406,15 @@ function Transport() {
         <IconBtn label="存下目前畫面（PNG）" onClick={snapshot}>
           <Camera size={16} />
         </IconBtn>
+        <IconBtn label="全螢幕展示（F；在畫面上連點兩下也可以）" onClick={() => toggleStageFullscreen()}>
+          <Maximize size={16} />
+        </IconBtn>
         <Segmented
           id="aspect"
           size="sm"
           value={aspect}
           onChange={(a) => set({ aspect: a })}
-          options={(['16:9', '4:3', '1:1', '9:16'] as Aspect[]).map((a) => ({ value: a, label: a, title: `畫面比例 ${a}` }))}
+          options={(['fit', '16:9', '4:3', '1:1', '9:16'] as Aspect[]).map((a) => ({ value: a, label: ASPECT_LABEL[a], title: a === 'fit' ? '填滿：用掉舞台區所有空間（導出時用目前的長寬比）' : `畫面比例 ${a}` }))}
         />
       </div>
     </div>
@@ -323,6 +424,9 @@ function Transport() {
 function SubjectBar() {
   const subject = useStore((s) => s.subject);
   const set = useStore((s) => s.set);
+  const subjectVer = useStore((s) => s.subjectVer);
+  const setSubjectVer = useStore((s) => s.setSubjectVer);
+  useStore((s) => s.themeRev); // 自訂主題的名稱會變
   return (
     <div className="scroll-x -mx-1 flex gap-1 px-1 pb-0.5" role="radiogroup" aria-label="主體">
       {SUBJECT_ORDER.map((id, i) => {
@@ -353,6 +457,29 @@ function SubjectBar() {
           </Fragment>
         );
       })}
+      <div className="ml-1 flex shrink-0 items-center gap-1 rounded-lg border border-line bg-panel px-1 py-0.5" role="radiogroup" aria-label="主體版本" title="主體的設計版本：v1 是最初的設計（原樣保留），v2 是重新設計的版本；全域切換">
+        {(['v1', 'v2'] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={subjectVer === v}
+            onClick={() => setSubjectVer(v)}
+            className={`rounded-md px-2 py-1 text-[12px] font-semibold transition-colors ${subjectVer === v ? 'bg-mot-soft text-fg' : 'text-fg-3 hover:text-fg'}`}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        title="匯入你自己的動畫主題檔（JSON）；視窗裡有格式說明、範本、給 AI 的提示詞"
+        onClick={() => set({ themeOpen: true })}
+        className="ml-1 flex shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-line-2 px-2.5 py-1.5 text-[13px] text-fg-2 transition-colors hover:border-mot/60 hover:text-fg"
+      >
+        <Upload size={15} />
+        匯入主題
+      </button>
     </div>
   );
 }
