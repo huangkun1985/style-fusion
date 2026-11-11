@@ -1,58 +1,12 @@
 // 2.0 版式的新區塊：場景帶、右側面板（Agent｜調整｜聲音｜規格）、手機底部列。Agent 面板本身在 AgentPanel.tsx。
-import { ChevronLeft, ChevronRight, Dices, Download, LayoutGrid, Plus } from 'lucide-react';
-import { loopSeconds } from '../engine/renderer';
-import { SUBJECTS } from '../engine/subjects';
-import { themes } from '../engine/themes';
-import { mixSpec, useLookMove } from '../store/hooks';
+import { ChevronLeft, ChevronRight, Dices, Download, LayoutGrid } from 'lucide-react';
 import { useStore, type RightTab } from '../store/store';
 import { AgentPanel, AgentStatus } from './AgentPanel';
 import { InfoPanel } from './InfoPanel';
-import { Thumb } from './Thumb';
 import { IconBtn } from './ui';
 
-// ---------- 場景帶（高 64） ----------
-export function SceneStrip() {
-  const { move, tune, v, m } = useLookMove();
-  const subject = useStore((s) => s.subject);
-  const scenes = useStore((s) => s.scenes);
-  const active = useStore((s) => s.activeScene);
-  useStore((s) => s.themeRev);
-  const L = loopSeconds(SUBJECTS[subject], move, tune);
-  const idx = Math.max(0, scenes.findIndex((s) => s.id === active));
-  const sc = scenes[idx];
-  const generated = subject === 'custom';
-  const key = `${v.map((x) => x.id + x.w).join()}|${m.map((x) => x.id + x.w).join()}|${subject}|${JSON.stringify(tune)}|${themes.rev()}`;
-  return (
-    <div className="flex h-16 shrink-0 gap-1" aria-label="場景帶">
-      <div
-        className="flex min-w-0 flex-[0_1_420px] items-center gap-2.5 overflow-hidden rounded-xl border-[1.5px] border-mot bg-mot-soft px-2.5"
-        title={`場景 ${idx + 1}：${generated ? '生成的內容（匯入或 Agent 做的動畫；α2 起可以用對話修改）' : '內建模板（換風格、換動效；內容由程式畫，不能用對話修改）'}。一個專案可以有多個場景，排成一支片子`}
-      >
-        <span className="relative h-10 w-[60px] shrink-0 overflow-hidden rounded-md bg-stage">
-          <Thumb spec={() => mixSpec(v, m, subject, tune)} specKey={key} className="size-full" />
-        </span>
-        <span className="flex min-w-0 flex-col leading-[18px]">
-          <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-fg">
-            <span className="truncate">
-              {idx + 1} {SUBJECTS[subject].name}
-            </span>
-            <span className={`shrink-0 rounded px-1.5 text-[12px] ${generated ? 'bg-mot font-bold text-on-mot' : 'border border-line-2 text-fg-2'}`}>{generated ? '生成' : '模板'}</span>
-          </span>
-          <span className="num text-[12px] text-fg-2">
-            {L.toFixed(1)}s{sc && sc.name !== `場景 ${idx + 1}` ? `　${sc.name}` : ''}
-          </span>
-        </span>
-      </div>
-      <div
-        className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-2 px-3 text-[12px] text-fg-3"
-        title="加場景：把幾段動畫排成一支片子。多場景排片在 2.0 α3 開放；現在一個專案先只有一個場景"
-      >
-        <Plus size={14} className="shrink-0" />
-        <span className="truncate">加一個場景，排成一支片子（下一階段開放）</span>
-      </div>
-    </div>
-  );
-}
+// 場景帶在 SceneStrip.tsx（α3 多場景）
+export { SceneStrip } from './SceneStrip';
 
 // ---------- 右側面板 ----------
 const TABS: { id: RightTab; label: string; tip: string }[] = [
