@@ -5,6 +5,7 @@
 // - 舊版（1.x）的 style-fusion-v1：第一次開啟、還沒有任何專案時自動轉成一個單場景專案，收藏變成「我的配方」。原資料保留不刪。
 // - 還原時每個欄位都逐一檢查型別與範圍（審查 R-18）：存檔被別的分頁寫壞、被改過、來自舊版，都不會讓頁面打不開。
 import { snapAuditionToPlan } from '../audio/engine';
+import { importedMidiRaw, setImportedMidi } from '../audio/midiImport';
 import { sanitizeAudioPrefs } from '../audio/plan';
 import { AUDIO_DEFAULT, type AudioPrefs } from '../audio/types';
 import { RECIPES } from '../data/recipes';
@@ -13,7 +14,7 @@ import { thumbs } from '../engine/thumbs';
 import { saveBlob, safeStorage } from '../lib/platform';
 import { resetHistory } from './history';
 import { themes } from '../engine/themes';
-import { makeProject, MAX_CHAT, newId, sanitizeAgent, sanitizeMix, sanitizeProject, sanitizeRecipes, sceneKindOf, sceneMusicOf, type Project, type SceneMix } from './project';
+import { makeProject, MAX_CHAT, newId, sanitizeAgent, sanitizeMidi, sanitizeMix, sanitizeProject, sanitizeRecipes, sceneKindOf, sceneMusicOf, type Project, type SceneMix } from './project';
 import { useStore, type RightTab, type UiMode } from './store';
 
 const DB_NAME = 'style-fusion';
@@ -229,10 +230,32 @@ export function currentProject(): Project {
     recipes: s.saved,
     agent: s.agent,
     ...(s.migratedFrom ? { migratedFrom: s.migratedFrom } : {}),
+    ...(importedMidiRaw() ? { midi: importedMidiRaw()! } : {}),
   };
 }
 
 /** 把專案放進 store（換專案、開檔、開機） */
+/** 專案帶著匯入的 MIDI：在檢查場景之前先放回去（場景的音樂設定 piece: 'import' 才認得）。沒有帶的專案沿用目前的（舊版行為） */
+function installMidi(raw: unknown) {
+  const m = sanitizeMidi((raw as { midi?: unknown } | null)?.midi);
+  if (!m || m.b64 === importedMidiRaw()?.b64) return;
+  try {
+    const bin = atob(m.b64);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    setImportedMidi(u8, m.name);
+    useStore.setState((s) => ({ midiRev: s.midiRev + 1 }));
+  } catch {
+    /* 壞掉就不放 */
+  }
+}
+
+/** 外來的專案資料 → 專案（先放回 MIDI，再逐欄檢查） */
+function parseProject(raw: unknown): Project | null {
+  installMidi(raw);
+  return sanitizeProject(raw, FALLBACK_TEMPLATE);
+}
+
 function loadIntoStore(p: Project) {
   const sc = p.scenes.find((x) => x.id === p.active) ?? p.scenes[0];
   const mx = sc.mix;
@@ -313,11 +336,11 @@ export async function bootPersistence(): Promise<string | null> {
   let project: Project | null = null;
   const curId = safeStorage.getItem(LS_CURRENT);
   try {
-    if (curId) project = sanitizeProject(await backend.get(curId), FALLBACK_TEMPLATE);
+    if (curId) project = parseProject(await backend.get(curId));
     if (!project) {
       const list = (await backend.list()).sort((a, b) => b.updated - a.updated);
       for (const it of list) {
-        project = sanitizeProject(await backend.get(it.id), FALLBACK_TEMPLATE);
+        project = parseProject(await backend.get(it.id));
         if (project) break;
       }
     }
@@ -375,7 +398,7 @@ function startAutosave() {
   const offStore = useStore.subscribe((s, prev) => {
     const docChanged =
       s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.saved !== prev.saved ||
-      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes || s.chat !== prev.chat || s.themeRev !== prev.themeRev ||
+      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes || s.chat !== prev.chat || s.themeRev !== prev.themeRev || s.midiRev !== prev.midiRev ||
       (s.audio !== prev.audio && JSON.stringify(sceneMusicOf(s.audio)) !== JSON.stringify(sceneMusicOf(prev.audio)));
     if (docChanged && !s.hist.showingA && !s.hist.previewing) {
       if (s.saveState !== 'saving') useStore.setState({ saveState: 'saving' });
@@ -413,7 +436,7 @@ export const listProjects = () => backend.list().then((l) => l.sort((a, b) => b.
 export async function switchProject(id: string): Promise<boolean> {
   if (id === useStore.getState().projectId) return true;
   await writeNow();
-  const p = sanitizeProject(await backend.get(id), FALLBACK_TEMPLATE);
+  const p = parseProject(await backend.get(id));
   if (!p) return false;
   loadIntoStore(p);
   safeStorage.setItem(LS_CURRENT, p.id);
@@ -452,7 +475,7 @@ export async function openProjectFile(file: File): Promise<string | null> {
   } catch {
     return '這不是專案檔（內容不是 JSON）';
   }
-  const p = sanitizeProject(raw, FALLBACK_TEMPLATE);
+  const p = parseProject(raw);
   if (!p) return '這不是 Style Fusion 的專案檔（缺少 format 或場景）';
   await writeNow();
   p.id = newId();

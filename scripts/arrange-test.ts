@@ -60,6 +60,14 @@ for (const g of Object.keys(GENRES) as GenreId[]) {
         const hasFinal = s.tracks.some((t) => !t.drum && (t.role === 'chord' || t.role === 'pad' || t.role === 'bass') && t.notes.some((x) => x.t === last && x.dur >= s.stepsPerBar * 0.5));
         const anyChordTrack = s.tracks.some((t) => !t.drum && (t.role === 'chord' || t.role === 'pad' || t.role === 'bass'));
         if (anyChordTrack) ok(hasFinal, `${tag}：最後一小節有長和弦`);
+        // R-14（2.0 α3）：回落段（不含最後一小節）要有和弦或低音，不能只剩鋪底（以前浩室這類反拍的型態會被濾光）
+        const outro = sec.find((x) => x.kind === 'outro');
+        const hasChordOrBass = s.tracks.some((t) => !t.drum && (t.role === 'chord' || t.role === 'bass') && t.notes.length);
+        if (outro && outro.bars >= 2 && hasChordOrBass) {
+          const end = Math.min(outro.bar + outro.bars, s.bars - 1);
+          const filled = s.tracks.some((t) => !t.drum && (t.role === 'chord' || t.role === 'bass') && t.notes.some((x) => x.t >= outro.bar * s.stepsPerBar && x.t < end * s.stepsPerBar));
+          ok(filled, `${tag}：回落段有和弦或低音`);
+        }
         const peak = sec.find((x) => x.kind === 'peak' || x.kind === 'build2');
         if (peak && GENRES[g].drums !== 'none') ok(roleIn(s, 'perc', peak.bar, peak.bar + peak.bars), `${tag}：高潮有鼓`);
         if (sh === 'steady') ok(!s.tracks.some((t) => t.role === 'lead' && t.notes.length), `${tag}：平穩沒有主旋律`);

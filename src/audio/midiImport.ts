@@ -278,10 +278,15 @@ function toB64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
+/** 原始檔（2.0 α3：跟著專案存進 IndexedDB 與 .sfproj；localStorage 的 sf-midi-v1 仍保留當作上次的備份） */
+let raw: { name: string; b64: string } | null = null;
+export const importedMidiRaw = () => raw;
+
 export function setImportedMidi(bytes: ArrayBuffer | Uint8Array, name: string): ImportedMidi {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   const imp = parseMidiFile(u8, name);
   current = imp;
+  raw = { name, b64: toB64(u8) };
   if (u8.length <= PERSIST_LIMIT) {
     // 寫入失敗時，舊檔還留在儲存裡：不能用「讀得到」判斷，要看這次有沒有寫成功
     imp.persisted = safeStorage.setItem(STORE_KEY, JSON.stringify({ name, b64: toB64(u8) }));
@@ -292,6 +297,7 @@ export function setImportedMidi(bytes: ArrayBuffer | Uint8Array, name: string): 
 
 export function clearImportedMidi() {
   current = null;
+  raw = null;
   safeStorage.removeItem(STORE_KEY);
 }
 
@@ -305,6 +311,7 @@ try {
     for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     current = parseMidiFile(u8, o.name);
     current.persisted = true;
+    raw = { name: o.name, b64: o.b64 };
   }
 } catch {
   /* 存的資料壞了：當作沒有 */

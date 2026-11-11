@@ -97,6 +97,14 @@ export function applyArrangement(tracks: Track[], c: ArrangeCtx): Track[] {
     const role: TrackRole = tr.drum ? 'perc' : tr.role;
     if (c.bed && (role === 'lead' || role === 'counter')) continue;
     const notes: NoteEv[] = [];
+    // R-14：每小節哪些拍點本來就有音（回落時用來判斷要不要把別的音移過去）
+    const onBeat = new Set<number>();
+    const moved = new Map<number, number>();
+    for (const n of tr.notes) {
+      const b = Math.floor(n.t / c.spb);
+      const st = n.t - b * c.spb;
+      for (const k of c.spb === 16 ? [0, 8] : [0]) if (Math.abs(st - k) < 0.01) onBeat.add(b * 64 + k);
+    }
     for (const n of tr.notes) {
       const bar = Math.floor(n.t / c.spb);
       const sec = sectionAt(bar);
@@ -120,11 +128,23 @@ export function applyArrangement(tracks: Track[], c: ArrangeCtx): Track[] {
       if (sec.kind === 'outro') lv *= 1 - 0.45 * inSec;
       if (c.bed && role === 'arp') lv *= 0.75;
       let { t, dur } = n;
-      // 回落的和弦與低音放慢：只留每小節的第 1、3 拍（三拍子留第 1 拍），拉長；最後一小節另外處理
+      // 回落的和弦與低音放慢：只留每小節的第 1、3 拍（三拍子留第 1 拍），拉長；最後一小節另外處理。
+      // 那一拍剛好沒有音（浩室這類反拍的型態）：把那半小節裡最早的一個音移到拍點上，回落才不會只剩鋪底（審查 R-14）
       if (c.cadence && sec.kind === 'outro' && (role === 'chord' || role === 'bass') && bar < lastBar) {
         const step = n.t - bar * c.spb;
         const keepAt = c.spb === 16 ? [0, 8] : [0];
-        if (!keepAt.some((k) => Math.abs(step - k) < 0.01)) continue;
+        const span = c.spb === 16 ? 8 : c.spb;
+        const slot = keepAt.find((k) => step >= k - 0.01 && step < k + span - 0.01);
+        if (slot === undefined) continue;
+        if (Math.abs(step - slot) >= 0.01) {
+          const key = bar * 64 + slot;
+          if (onBeat.has(key)) continue;
+          // 和弦是同一個時間的好幾個音：記住第一個被移的音原本在哪一步，同一步的其他音一起移
+          const src = moved.get(key);
+          if (src === undefined) moved.set(key, step);
+          else if (Math.abs(src - step) >= 0.01) continue;
+          t = bar * c.spb + slot;
+        }
         dur = Math.max(dur, (c.spb === 16 ? 8 : 12) * 0.92);
       }
       if (c.cadence && bar === lastBar && role !== 'perc') continue; // 最後一小節：下面放一個長和弦

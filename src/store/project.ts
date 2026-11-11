@@ -100,6 +100,8 @@ export interface Project {
   agent: AgentDraft;
   /** 從哪裡轉來的（例如舊版的本機資料 style-fusion-v1）；只做紀錄 */
   migratedFrom?: string;
+  /** 匯入的 MIDI 原始檔（base64）；α3 起跟著專案走 */
+  midi?: { name: string; b64: string };
 }
 
 export const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
@@ -214,7 +216,15 @@ export function sanitizeProject(raw: unknown, fallbackTemplate: string): Project
     recipes: sanitizeRecipes(o.recipes),
     agent: sanitizeAgent(o.agent, fallbackTemplate),
     ...(typeof o.migratedFrom === 'string' ? { migratedFrom: o.migratedFrom.slice(0, 40) } : {}),
+    ...(sanitizeMidi(o.midi) ? { midi: sanitizeMidi(o.midi)! } : {}),
   };
+}
+
+const B64 = /^[A-Za-z0-9+/]+={0,2}$/;
+export function sanitizeMidi(raw: unknown): { name: string; b64: string } | null {
+  const o = obj(raw);
+  if (typeof o.b64 !== 'string' || o.b64.length > 4_000_000 || o.b64.length < 16 || !B64.test(o.b64)) return null;
+  return { name: str(o.name, '匯入的 MIDI', 100), b64: o.b64 };
 }
 
 export function makeProject(name: string, mix: SceneMix, recipes: SavedMix[], template: string): Project {

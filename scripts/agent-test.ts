@@ -79,5 +79,15 @@ const huge = JSON.parse(JSON.stringify(p));
 huge.scenes[0].theme = 'x'.repeat(500_000);
 ok(sanitizeProject(huge, 'x')?.scenes[0].theme === undefined, '太大的主題不收');
 
+// 5) α3：匯入的 MIDI 跟著專案
+const withMidi = JSON.parse(JSON.stringify(p));
+withMidi.midi = { name: 'a.mid', b64: 'TVRoZAAAAAYAAQABAeA=' };
+ok(sanitizeProject(withMidi, 'x')?.midi?.name === 'a.mid', 'MIDI 原始檔跟著專案讀回來');
+for (const bad of [{ b64: 'not base64!!' }, { b64: 'x' }, { b64: 5 }, { b64: 'A'.repeat(4_000_004) }, null]) {
+  const w = JSON.parse(JSON.stringify(p));
+  w.midi = bad;
+  ok(sanitizeProject(w, 'x')?.midi === undefined, `壞的 MIDI 欄位不收（${JSON.stringify(bad)?.slice(0, 30)}）`);
+}
+
 console.log(fails ? `AGENT FAIL（${fails}／${n} 項失敗）` : `AGENT OK（${n} 項）`);
 process.exit(fails ? 1 : 0);
