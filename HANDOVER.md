@@ -1,7 +1,10 @@
 # Style Fusion 交接文件（Hand over）
 
 > 寫給**在新的 session 接手這個專案的人（或新的 Claude）**。
-> ## 🆕 2026-11-12：2.0 α2 Agent 完成（v2.0.0-alpha.2，已提交並推送）
+> ## 🆕 2026-11-12：2.0 α3 風格牆與場景完成（v2.0.0-alpha.3，已提交並推送）
+> **新 session 先讀 `docs/交接-2.0-alpha3後.md`，下一階段用 `docs/下個session的提示詞-2.0-β.md`（先整理驗收清單給使用者，不要先寫程式）。** 驗收：`docs/驗收報告-v2.0.0-alpha.3.md`。架構見第 6.9 節。
+>
+> ## 2026-11-12：2.0 α2 Agent 完成（v2.0.0-alpha.2）
 > **新 session 先讀 `docs/交接-2.0-alpha2後.md`，下一階段用 `docs/下個session的提示詞-2.0-α3.md`。** 驗收：`docs/驗收報告-v2.0.0-alpha.2.md`。Agent 的架構見第 6.8 節。
 >
 > ## 2026-11-11：2.0 α1 清爽地基完成（v2.0.0-alpha.1，已提交 5c37090）
@@ -219,6 +222,13 @@ v1 檔案**不要改**（使用者要比較新舊）；改設計請改 v2。新�
 - **預覽**：`history.beginPreview(json, patch)` 換上新主題但不算一步、不存檔（`hist.previewing`）；`commitPreview`＝一步、`discardPreview`＝還原、`compareOriginal(true|false)`＝按住看原本的；預覽中改了別的文件內容會自動 `commitPreview`。結束時透過 `onPreviewEnd` 通知 `session.ts` 更新對話。
 - **資料**：場景的 `theme`（主題 JSON）與 `chat`（最多 60 則）跟著專案存；載入時把 `theme` 放回 `themes` 清單並設為目前的。復原歷史的文件多了 `theme`（目前主題的 JSON）。
 - **介面**：`components/AgentPanel.tsx`。內建模板的場景顯示生成表單；生成的場景顯示對話、修改卡，輸入框固定在面板底部。手動模式（連不上或 `?agent=manual`）同一套流程，「生成／送出」換成「複製提示詞／貼回」。
+
+### 6.9 風格牆、多場景、內容欄位（α3）
+- **風格牆**：store 的 `wall`／`wallFilter`／`wallBatch`（不存檔）。`lib/styleWall.ts` 的 `wallPicks(打開時的混合, 篩選, 批次)` 挑 8 個；`components/StyleWall.tsx` 疊在舞台區上（`Stage` 在 `wall` 時不掛主 canvas，主渲染迴圈因此不畫）。縮圖全部走 `thumbs` 排程器。
+- **多場景**：store 的 v／m／subject／tune／aspect／audio／chat／content 是「目前場景」；`store/scenes.ts` 的 `stashActive()` 把它們寫回 `scenes`，`switchScene`／`addScene`／`deleteScene`／`renameScene`／`moveScene` 都是一次 `setState`，所以都進復原歷史。長度 `sceneSeconds()`；上限 `MAX_SCENES`（12）、`MAX_TOTAL_SECONDS`（180）。
+- **內容欄位**：`engine/content.ts` 的 `CONTENT_FIELDS`（目前只有 type v2、logo）、`content(主體, 鍵, 預設)` 給主體畫圖時讀、`setContent()` 由 store 訂閱同步。存在 `SceneMix.content`。v1 一律沒有（`fieldsFor`）。
+- **打字算一步**：`history.beginGesture()`（聚焦）／`endGesture()`（離開）。
+- **MIDI**：專案的 `midi`（base64）；`persist.parseProject()` 在檢查場景之前先放回 MIDI。
 
 ## 7. 常見工作怎麼做
 
