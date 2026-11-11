@@ -63,7 +63,7 @@ class AudioEngine {
   private auditionGain: GainNode | null = null;
   private auditionTimer: ReturnType<typeof setTimeout> | null = null;
   /** 最近渲染過的音樂（BGM 與試聽共用，同一首歌不會算兩次；也讓來回切換曲風時秒切） */
-  private renders = new Map<string, { p: Promise<Stereo>; ms: number }>();
+  private renders = new Map<string, { p: Promise<Stereo>; ms: number; secs: number }>();
   private listeners = new Set<() => void>();
   private waiting: Array<() => void> = [];
   status: EngineStatus = { building: false, ready: false, error: null, renderMs: 0, ctxState: 'none', scheme: null, audition: null };
@@ -169,17 +169,26 @@ class AudioEngine {
       this.renders.set(key, hit);
       return hit;
     }
-    const entry = { p: null as unknown as Promise<Stereo>, ms: 0 };
+    const entry = { p: null as unknown as Promise<Stereo>, ms: 0, secs: 0 };
     const t0 = performance.now();
     // 在背景執行緒渲染（B-11）：換曲風、換風格時介面不卡
     entry.p = renderAsync(plan.song, scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true }, lane).then((pcm) => {
       entry.ms = Math.round(performance.now() - t0);
+      entry.secs = pcm.l.length / SAMPLE_RATE;
+      this.trimRenders();
       return pcm;
     });
     this.renders.set(key, entry);
     entry.p.catch(() => this.renders.delete(key));
-    while (this.renders.size > 4) this.renders.delete(this.renders.keys().next().value as string);
+    this.trimRenders();
     return entry;
+  }
+
+  /** 審查 R-03：快取以「總秒數」為上限（合計 240 秒、最多 4 首），不再是固定 4 首：
+   *  4 首 180 秒的配樂各 60 MB，加上播放與試聽的緩衝會到 360 MB。最近用到的那一首一定留著。 */
+  private trimRenders() {
+    const total = () => [...this.renders.values()].reduce((a, e) => a + e.secs, 0);
+    while (this.renders.size > 1 && (this.renders.size > 4 || total() > 240)) this.renders.delete(this.renders.keys().next().value as string);
   }
 
   // ---------- 渲染 BGM ----------

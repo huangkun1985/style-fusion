@@ -48,6 +48,9 @@ function frameCount(job: ExportJob) {
   return { L, total, n: Math.max(1, Math.round(total * job.fps)) };
 }
 
+/** GIF／PNG 序列的上限：格數 × 寬 × 高（約 1080p 的 240 格；以每像素 4 位元組算約 2 GB 的原始畫面，實際存的是壓縮後的） */
+export const EXPORT_PIXEL_LIMIT = 500_000_000;
+
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 // ---------- MP4 音訊 ----------
@@ -134,6 +137,12 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
       return { blob, name: `${base}.png` };
     }
     const { total, n } = frameCount(job);
+    // 審查 R-03：GIF 與 PNG 序列要把所有格子放在記憶體裡；「格數 × 像素」太大時（例如 1080p 整首 180 秒），分頁會被瀏覽器關掉。
+    // 開始之前就擋下來，建議改用 MP4（逐格編碼，不累積）
+    if ((job.format === 'gif' || job.format === 'zip') && n * job.w * job.h > EXPORT_PIXEL_LIMIT) {
+      const what = job.format === 'gif' ? 'GIF' : 'PNG 序列';
+      throw new Error(`${what} 這次要 ${n} 格 × ${job.w}×${job.h}，太大了，瀏覽器可能撐不住。請改用 MP4，或縮短長度、降低尺寸（上限約 ${Math.floor(EXPORT_PIXEL_LIMIT / (job.w * job.h))} 格）`);
+    }
     if (job.format === 'gif') {
       const gif = GIFEncoder();
       // 審查 R-11：GIF 的延遲單位是 1/100 秒，gifenc 會把每格四捨五入（24 fps → 每格 4 單位＝25 fps，快 4%）。
