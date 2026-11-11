@@ -112,6 +112,20 @@ export function loadInstrument(id: string): Promise<SampledInst | null> {
 }
 export const instrument = (id: string): SampledInst | null => ready.get(id) ?? null;
 
+/** 主執行緒把樂器交給背景執行緒之後，放掉自己的那一份（審查 R-20：解碼後的取樣一個樂器約 5 MB，不要兩邊各留一份）。
+ *  之後主執行緒還要用（導出 XM、背景執行緒壞掉改在主執行緒渲染）時，ensureSamplesFor 會重新解碼。
+ *  已經拿到這個樂器的呼叫端手上的參照不受影響（資料是複製過去的，不是轉移）。 */
+export function releaseInstrument(id: string) {
+  if (external) return;
+  ready.delete(id);
+  insts.delete(id);
+}
+export function releaseDrums() {
+  if (external) return;
+  drums = null;
+  drumsP = null;
+}
+
 /** 裝入一個已經解碼好的樂器（背景執行緒用：主執行緒解碼後傳過來） */
 export function installInstrument(inst: SampledInst) {
   external = true;

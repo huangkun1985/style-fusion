@@ -345,6 +345,7 @@ function RunStatus() {
 // ---------- 修改卡 ----------
 function PendingCard() {
   const p = useAgentRun((s) => s.pending);
+  const canRetry = useAgentRun((s) => !!s.last) && useBridge().state === 'ok';
   const previewing = useStore((s) => s.hist.previewing);
   const comparing = useStore((s) => s.hist.comparing);
   useEffect(() => {
@@ -399,9 +400,11 @@ function PendingCard() {
         <Button variant="outline" onClick={() => rejectChange()} title="放棄：不要這次的結果，舞台回到原本的">放棄</Button>
       </div>
       <div className="flex gap-2">
-        <Button size="xs" variant="ghost" onClick={() => retryLast()} title="再試一次：同樣的要求再送一次，換一個結果">
-          <RefreshCw size={12} /> 再試一次
-        </Button>
+        {canRetry && (
+          <Button size="xs" variant="ghost" onClick={() => retryLast()} title="再試一次：同樣的要求再送一次，換一個結果">
+            <RefreshCw size={12} /> 再試一次
+          </Button>
+        )}
         {over && (
           <Button size="xs" variant="ghost" onClick={() => askSimplify()} title={`請 Agent 簡化：每幀超過 ${FRAME_BUDGET_MS} ms 會讓播放與導出變慢，請 Agent 在外觀不變的前提下減少圖層`}>
             請 Agent 簡化

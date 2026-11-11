@@ -7,7 +7,7 @@ import { CueTracker } from './cues';
 import type { Stereo } from './dsp';
 import { mixdown } from './mixdown';
 import type { AudioPlan } from './plan';
-import { renderAsync } from './renderClient';
+import { renderAsync, SUPERSEDED } from './renderClient';
 import { synthSfx } from './sfx';
 import { AUDIO_DEFAULT, SAMPLE_RATE, type AudioPrefs, type SchemeId, type SfxKind } from './types';
 
@@ -160,7 +160,8 @@ class AudioEngine {
 
   // ---------- 渲染（含快取） ----------
   /** 把這首歌用指定的聲音方案渲染出來。同一首歌 + 同一方案只算一次（有最近 4 筆的快取） */
-  private renderFor(plan: AudioPlan, scheme: SchemeId): { p: Promise<Stereo>; ms: number } {
+  /** lane：bgm／audition。同一道的新渲染會取消還沒開始的舊渲染（審查 R-05） */
+  private renderFor(plan: AudioPlan, scheme: SchemeId, lane?: 'bgm' | 'audition'): { p: Promise<Stereo>; ms: number } {
     const key = `${plan.songKey}|${scheme}`;
     const hit = this.renders.get(key);
     if (hit) {
@@ -171,7 +172,7 @@ class AudioEngine {
     const entry = { p: null as unknown as Promise<Stereo>, ms: 0 };
     const t0 = performance.now();
     // 在背景執行緒渲染（B-11）：換曲風、換風格時介面不卡
-    entry.p = renderAsync(plan.song, scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true }).then((pcm) => {
+    entry.p = renderAsync(plan.song, scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true }, lane).then((pcm) => {
       entry.ms = Math.round(performance.now() - t0);
       return pcm;
     });
@@ -199,8 +200,16 @@ class AudioEngine {
     const token = ++this.token;
     this.setStatus({ building: true, error: null });
     try {
-      const r = this.renderFor(plan, plan.scheme);
-      const pcm = await r.p;
+      let r = this.renderFor(plan, plan.scheme, 'bgm');
+      let pcm: Stereo;
+      try {
+        pcm = await r.p;
+      } catch (e) {
+        // 快取裡共用的那份被同一道更新的渲染取代了，但這次的計畫還是最新的：重算一次
+        if ((e as Error).message !== SUPERSEDED || token !== this.token) throw e;
+        r = this.renderFor(plan, plan.scheme, 'bgm');
+        pcm = await r.p;
+      }
       if (token !== this.token) return null;
       this.pcm = pcm;
       this.pcmKey = plan.musicKey;
@@ -213,7 +222,7 @@ class AudioEngine {
       resolve.forEach((f) => f());
       return pcm;
     } catch (e) {
-      if (token === this.token) this.setStatus({ building: false, error: `音樂渲染失敗：${(e as Error).message}` });
+      if (token === this.token && (e as Error).message !== SUPERSEDED) this.setStatus({ building: false, error: `音樂渲染失敗：${(e as Error).message}` });
       return null;
     }
   }
@@ -357,7 +366,13 @@ class AudioEngine {
     const tok = ++this.auditionTok;
     this.setStatus({ building: true, error: null, audition: scheme });
     try {
-      const pcm = await this.renderFor(plan, scheme).p;
+      let pcm: Stereo;
+      try {
+        pcm = await this.renderFor(plan, scheme, 'audition').p;
+      } catch (e) {
+        if ((e as Error).message !== SUPERSEDED || tok !== this.auditionTok) throw e;
+        pcm = await this.renderFor(plan, scheme, 'audition').p;
+      }
       if (tok !== this.auditionTok) return; // 渲染期間被取消，或歌又換了
       const b = ctx.createBuffer(2, pcm.l.length, SAMPLE_RATE);
       b.copyToChannel(pcm.l as Float32Array<ArrayBuffer>, 0);
@@ -382,7 +397,7 @@ class AudioEngine {
       this.auditionGain = g;
       this.stopBgm();
     } catch (e) {
-      if (tok === this.auditionTok) {
+      if (tok === this.auditionTok && (e as Error).message !== SUPERSEDED) {
         this.fadeOutAudition();
         this.setStatus({ error: `試聽失敗：${(e as Error).message}`, audition: null });
       }

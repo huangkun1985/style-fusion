@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "preview:web": "vite preview --mode web --port 4181 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test:audio": "tsx scripts/audio-test.ts && tsx scripts/midi-import-test.ts && tsx scripts/theme-test.ts && tsx scripts/arrange-test.ts && tsx scripts/share-test.ts",
+    "test:audio": "tsx scripts/audio-test.ts && tsx scripts/midi-import-test.ts && tsx scripts/theme-test.ts && tsx scripts/arrange-test.ts && tsx scripts/share-test.ts && tsx scripts/agent-test.ts",
     "samples:build": "node scripts/samples/build.mjs",
     "audio:sweep": "tsx scripts/audio-sweep.ts"
   },

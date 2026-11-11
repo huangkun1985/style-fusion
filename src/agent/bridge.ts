@@ -15,7 +15,9 @@ const localPage = () => typeof location !== 'undefined' && /^https?:$/.test(loca
 
 /** 檢查橋接：連得上、Claude Code 有沒有裝、有沒有登入。結果會快取；refresh=true 重新問（例如使用者剛登入） */
 export function connectBridge(refresh = false): Promise<BridgeInfo> {
-  if (!localPage()) return Promise.resolve((cached = { state: 'none' }));
+  // 網址加 ?agent=manual 可以強制用手動模式（想自己挑 AI、或測試時用）
+  const forced = typeof location !== 'undefined' && new URLSearchParams(location.search).get('agent') === 'manual';
+  if (!localPage() || forced) return Promise.resolve((cached = { state: 'none' }));
   if (cached && !refresh && cached.state !== 'checking') return Promise.resolve(cached);
   if (pending && !refresh) return pending;
   pending = (async () => {
