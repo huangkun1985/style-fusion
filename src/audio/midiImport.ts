@@ -283,8 +283,9 @@ export function setImportedMidi(bytes: ArrayBuffer | Uint8Array, name: string): 
   const imp = parseMidiFile(u8, name);
   current = imp;
   if (u8.length <= PERSIST_LIMIT) {
-    safeStorage.setItem(STORE_KEY, JSON.stringify({ name, b64: toB64(u8) }));
-    imp.persisted = safeStorage.getItem(STORE_KEY) !== null;
+    // 寫入失敗時，舊檔還留在儲存裡：不能用「讀得到」判斷，要看這次有沒有寫成功
+    imp.persisted = safeStorage.setItem(STORE_KEY, JSON.stringify({ name, b64: toB64(u8) }));
+    if (!imp.persisted) safeStorage.removeItem(STORE_KEY);
   } else safeStorage.removeItem(STORE_KEY);
   return imp;
 }

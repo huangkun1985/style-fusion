@@ -17,11 +17,13 @@ import { thumbs } from '../engine/thumbs';
 import { themes } from '../engine/themes';
 import { is3D, type SubjectId, type Tune } from '../engine/types';
 import { safeStorage } from '../lib/platform';
+import { isSubjectId, sanitizeSels, sanitizeTune } from './sanitize';
 import { cleanMusic, decodeMix, musicOf, type MusicPrefs } from './share';
 
 export type View = 'mixer' | 'library' | 'recipes' | 'saved';
 /** fit：填滿舞台區的所有空間（比例跟著視窗走）；其餘是固定比例 */
 export type Aspect = 'fit' | '16:9' | '4:3' | '1:1' | '9:16';
+const ASPECTS: Record<Aspect, true> = { fit: true, '16:9': true, '4:3': true, '1:1': true, '9:16': true };
 export type InfoTab = 'brief' | 'sound' | 'tune' | 'code' | 'prompt';
 export type Kind = 'v' | 'm';
 export type ThemePref = 'system' | 'dark' | 'light';
@@ -73,6 +75,8 @@ interface State {
   audio: AudioPrefs;
   /** 匯入的 MIDI 每次更換就加一（不存檔），讓音樂計畫重算 */
   midiRev: number;
+  /** 「填滿」比例下舞台實際量到的長寬比（不存檔）：音效提示點的左右位置等要跟著重算 */
+  fitAr: number;
   theme: ThemePref;
   toast: { id: number; text: string } | null;
 
@@ -199,6 +203,7 @@ export const useStore = create<State>()(
       welcomed: false,
       audio: { ...AUDIO_DEFAULT },
       midiRev: 0,
+      fitAr: 16 / 9,
       theme: 'system',
       toast: null,
 
@@ -312,7 +317,7 @@ export const useStore = create<State>()(
       loadSaved: (id) => {
         const it = get().saved.find((x) => x.id === id);
         if (!it) return;
-        set({ v: it.v, m: it.m, subject: it.subject, tune: { ...TUNE_DEFAULT, ...it.tune }, ...(it.audio ? { audio: { ...get().audio, ...cleanMusic(it.audio) } } : {}), view: 'mixer' });
+        set({ v: sanitizeSels(it.v, VISUAL_MAP), m: sanitizeSels(it.m, MOTION_MAP), subject: isSubjectId(it.subject) ? it.subject : 'mascot', tune: sanitizeTune(it.tune), ...(it.audio ? { audio: { ...get().audio, ...cleanMusic(it.audio) } } : {}), view: 'mixer' });
         get().showToast(`已載入「${it.name}」`);
       },
       deleteSaved: (id) => set({ saved: get().saved.filter((x) => x.id !== id) }),
@@ -320,7 +325,7 @@ export const useStore = create<State>()(
       importCode: (code) => {
         const mix = decodeMix(code);
         if (!mix) return false;
-        set({ v: mix.v, m: mix.m, subject: mix.s, tune: { ...TUNE_DEFAULT, ...(mix.t ?? {}) }, ...(mix.a ? { audio: { ...get().audio, ...mix.a } } : {}), view: 'mixer' });
+        set({ v: mix.v, m: mix.m, subject: mix.s, tune: sanitizeTune(mix.t ?? {}), ...(mix.a ? { audio: { ...get().audio, ...mix.a } } : {}), view: 'mixer' });
         return true;
       },
       importMidi: (bytes, name) => {
@@ -349,7 +354,7 @@ export const useStore = create<State>()(
     {
       name: 'style-fusion-v1',
       version: 1,
-      storage: createJSONStorage(() => safeStorage),
+      storage: createJSONStorage(() => ({ getItem: safeStorage.getItem, setItem: (k: string, v: string) => void safeStorage.setItem(k, v), removeItem: safeStorage.removeItem })),
       partialize: (s) => ({
         v: s.v,
         m: s.m,
@@ -371,11 +376,19 @@ export const useStore = create<State>()(
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<State>;
-        const v = (p.v ?? current.v).filter((x) => VISUAL_MAP[x.id]);
-        const m = (p.m ?? current.m).filter((x) => MOTION_MAP[x.id]);
+        // 本機存檔可能來自舊版、被別的分頁寫壞、或被惡意的連結寫入：每一項都整理成合法的值
+        const v = p.v === undefined ? current.v : sanitizeSels(p.v, VISUAL_MAP);
+        const m = p.m === undefined ? current.m : sanitizeSels(p.m, MOTION_MAP);
         const subjectVer: SubjectVer = p.subjectVer === 'v1' ? 'v1' : 'v2';
         setSubjectVersion(subjectVer);
-        return { ...current, ...p, subjectVer, v, m, tune: { ...TUNE_DEFAULT, ...(p.tune ?? {}) }, audio: { ...sanitizeAudioPrefs(p.audio), on: false } };
+        const subject = isSubjectId(p.subject) ? p.subject : current.subject;
+        const saved = Array.isArray(p.saved)
+          ? p.saved
+              .filter((x) => x && typeof x === 'object' && typeof x.id === 'string')
+              .map((x) => ({ ...x, name: typeof x.name === 'string' ? x.name : '未命名配方', v: sanitizeSels(x.v, VISUAL_MAP), m: sanitizeSels(x.m, MOTION_MAP), subject: isSubjectId(x.subject) ? x.subject : 'mascot', tune: sanitizeTune(x.tune) }))
+          : current.saved;
+        const aspect = p.aspect && Object.hasOwn(ASPECTS, p.aspect) ? p.aspect : current.aspect;
+        return { ...current, ...p, subjectVer, subject, saved, aspect, v, m, tune: sanitizeTune(p.tune ?? {}), audio: { ...sanitizeAudioPrefs(p.audio), on: false } };
       },
     },
   ),

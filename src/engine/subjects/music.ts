@@ -10,7 +10,7 @@ import { composeSong, stepToSec } from '../../audio/compose';
 import { NOTE_NAMES, type Song, type TrackRole } from '../../audio/types';
 import { darken, luma, mix, rgba } from '../color';
 import type { Env } from '../env';
-import { audioLatency, getLiveSong } from '../liveSong';
+import { getLiveSong, liveLatency } from '../liveSong';
 import { TAU, clamp, hash, lerp, smooth } from '../util';
 import type { Subject } from './types';
 
@@ -110,26 +110,82 @@ function currentSong(): Song {
 
 /** 距離音符起點的秒數（循環：在整首的頭尾接得起來） */
 const since = (t: number, s: number, sec: number) => (((t - s) % sec) + sec) % sec;
+
+// 效能：每幀只看「時間窗內」的音符，不再把整首歌掃一遍（匯入的 MIDI 動輒幾千個音，逐一掃會讓每幀超過 40 ms）。
+// 音符已依起點排序；起點陣列與最長音長每個陣列只算一次。
+interface Idx {
+  st: Float64Array;
+  maxDur: number;
+}
+const idxCache = new WeakMap<NoteS[], Idx>();
+function idxOf(notes: NoteS[]): Idx {
+  let ix = idxCache.get(notes);
+  if (!ix) {
+    const st = new Float64Array(notes.length);
+    let maxDur = 0;
+    notes.forEach((n, i) => {
+      st[i] = n.s;
+      maxDur = Math.max(maxDur, n.e - n.s);
+    });
+    ix = { st, maxDur };
+    idxCache.set(notes, ix);
+  }
+  return ix;
+}
+/** 第一個起點 ≥ x 的位置 */
+function lowerBound(st: Float64Array, x: number): number {
+  let lo = 0;
+  let hi = st.length;
+  while (lo < hi) {
+    const m = (lo + hi) >> 1;
+    if (st[m] < x) lo = m + 1;
+    else hi = m;
+  }
+  return lo;
+}
+/** 第一個起點 > x 的位置 */
+function upperBound(st: Float64Array, x: number): number {
+  let lo = 0;
+  let hi = st.length;
+  while (lo < hi) {
+    const m = (lo + hi) >> 1;
+    if (st[m] <= x) lo = m + 1;
+    else hi = m;
+  }
+  return lo;
+}
+/** 依序走過「起點在 t 之前 W 秒內」的音符（跨過整首的頭尾也算），dt＝距離起點的秒數（和 since 相同） */
+function eachNear(notes: NoteS[], t: number, sec: number, W: number, fn: (n: NoteS, dt: number) => void) {
+  if (!notes.length) return;
+  const { st } = idxOf(notes);
+  if (W >= sec) {
+    for (const n of notes) fn(n, since(t, n.s, sec));
+    return;
+  }
+  const lo = lowerBound(st, t - W);
+  const hi = upperBound(st, t);
+  for (let i = lo; i < hi; i++) fn(notes[i], t - st[i]);
+  if (t - W < 0) for (let i = lowerBound(st, sec + t - W); i < notes.length; i++) fn(notes[i], t - st[i] + sec);
+}
 /**
  * 包絡（0..1）：照樂器的發聲方式——起音 A 秒、持續中以 D 的速度衰減、放開後以 R 秒衰減。
  * 同時響的音取最大值。
  */
 function envOf(notes: NoteS[] | undefined, t: number, sec: number, A: number, D: number, R: number): number {
-  if (!notes) return 0;
+  if (!notes || !notes.length) return 0;
   let m = 0;
-  for (const n of notes) {
-    const dt = since(t, n.s, sec);
+  eachNear(notes, t, sec, idxOf(notes).maxDur + R * 6, (n, dt) => {
     const d = n.e - n.s;
     let a: number;
     if (dt < d) a = Math.min(1, dt / A) * Math.exp(-dt * D);
     else {
       const rel = dt - d;
-      if (rel > R * 6) continue;
+      if (rel > R * 6) return;
       a = Math.min(1, d / A) * Math.exp(-d * D) * Math.exp(-rel / R);
     }
     a *= n.v;
     if (a > m) m = a;
-  }
+  });
   return m;
 }
 /** 單一音符的包絡（envOf 的單音版；輻射頻譜逐音高取最大值用） */
@@ -153,35 +209,32 @@ const ADR: Record<TrackRole, [number, number, number]> = {
 };
 /** 擊打：起音瞬間全亮、只看衰減（鼓，以及每個音的「落鍵」那一下） */
 function hitOf(notes: NoteS[] | undefined, t: number, sec: number, R: number): number {
-  if (!notes) return 0;
+  if (!notes || !notes.length) return 0;
   let m = 0;
-  for (const n of notes) {
-    const dt = since(t, n.s, sec);
-    if (dt > R * 6) continue;
+  eachNear(notes, t, sec, R * 6, (n, dt) => {
     const a = Math.exp(-dt / R) * n.v; // 起音是瞬間的：落下那一刻就是最亮
     if (a > m) m = a;
-  }
+  });
   return m;
 }
-/** 最近開始的音與它前一個音（音高輪的滑動用） */
+/** 最近開始的音與它前一個音（音高輪的滑動用）；同時開始的幾個音取原本排序的第一個 */
 function recent(notes: NoteS[], t: number, sec: number): [NoteS | null, NoteS | null, number] {
-  let best: NoteS | null = null;
-  let bestDt = Infinity;
-  let prev: NoteS | null = null;
-  let prevDt = Infinity;
-  for (const n of notes) {
-    const dt = since(t, n.s, sec);
-    if (dt < bestDt) {
-      prev = best;
-      prevDt = bestDt;
-      best = n;
-      bestDt = dt;
-    } else if (dt < prevDt) {
-      prev = n;
-      prevDt = dt;
-    }
+  const N = notes.length;
+  if (!N) return [null, null, Infinity];
+  const { st } = idxOf(notes);
+  let i = upperBound(st, t) - 1;
+  if (i < 0) i = N - 1; // t 在第一個音之前：最近的是整首最後一個音（跨過頭尾）
+  const j = lowerBound(st, st[i]);
+  const best = notes[j];
+  const bestDt = since(t, st[j], sec);
+  if (N === 1) return [best, null, bestDt];
+  let prev: NoteS;
+  if (j + 1 <= i) prev = notes[j + 1];
+  else {
+    const k = (j - 1 + N) % N;
+    prev = notes[lowerBound(st, st[k])];
   }
-  return [best, prev, bestDt];
+  return [best, prev === best ? null : prev, bestDt];
 }
 const noteName = (p: number) => `${NOTE_NAMES[((p % 12) + 12) % 12]}${Math.floor(p / 12) - 1}`;
 /** 音名 → 角度（12 點鐘方向是 C，順時針） */
@@ -229,8 +282,8 @@ export const music: Subject = {
     const A = analyse(currentSong());
     const song = A.song;
     const sec = A.sec;
-    // 畫面時間＝音樂時間（和音訊引擎的 BGM 對齊方式一樣：時鐘秒數取餘整首長度），再減去喇叭的輸出延遲
-    const tm = (((M.tStep - audioLatency()) % sec) + sec) % sec;
+    // 畫面時間＝音樂時間（和音訊引擎的 BGM 對齊方式一樣：時鐘秒數取餘整首長度），再減去喇叭的輸出延遲（只有即時舞台；導出的音軌從 0 對齊，不減）
+    const tm = (((M.tStep - liveLatency()) % sec) + sec) % sec;
     const L = layout(env);
     const { cx } = L;
     let R = L.R;
@@ -433,22 +486,16 @@ export const music: Subject = {
         };
       }
       const peak = l.role === 'lead' || l.role === 'counter' ? 0.17 : l.role === 'pad' ? 0.05 : l.role === 'bass' ? 0.08 : 0.11;
-      for (const n of l.notes) {
-        const dt = since(tm, n.s, sec);
-        if (dt > 1.1) continue;
+      eachNear(l.notes, tm, sec, 1.1, (n, dt) => {
         const sus = envNote(n, tm, sec, Aa, Dd, Rr);
         const amp = R * peak * n.v * Math.max(sus * 0.55, Math.exp(-dt / 0.2));
         const a = pcAngle(n.p);
         bumps.push({ x: Math.cos(a) * r, y: Math.sin(a) * r, r, a, amp, rip: R * 0.045 * n.v * Math.exp(-dt / 0.4), ripR: dt * R * 0.85, dt });
-      }
+      });
     });
     const kicks: { rw: number; amp: number }[] = [];
     if (drums?.kick) {
-      for (const n of drums.kick) {
-        const dt = since(tm, n.s, sec);
-        if (dt > 1.3) continue;
-        kicks.push({ rw: R * 0.05 + dt * R * 1.05, amp: R * 0.11 * n.v * Math.exp(-dt / 0.42) });
-      }
+      eachNear(drums.kick, tm, sec, 1.3, (n, dt) => kicks.push({ rw: R * 0.05 + dt * R * 1.05, amp: R * 0.11 * n.v * Math.exp(-dt / 0.42) }));
     }
     const rDrum = drums ? rad[k - 1] : R;
     const SA = 0.24; // 擊打隆起在角度方向的寬度
@@ -530,20 +577,94 @@ export const music: Subject = {
     const fogStd = lum || sil || lineMode ? fogGrad(baseAlpha * 0.16, baseAlpha * 0.62, lineC) : rgba(lineC, baseAlpha * 0.6);
     const fogMain = lum || sil || lineMode ? fogGrad(baseAlpha * 0.16, baseAlpha, lineC) : rgba(lineC, baseAlpha * 0.6);
     const peaks: { pts: number[]; hmax: number }[] = [];
+    // 效能（1.2.1）：每圈 113 個點、36 圈，這一段是整格最花時間的地方。算式和 height()／proj() 完全相同，只是
+    //   ① 角度的 cos／sin 每格只算一次、所有圈共用；② 隆起的「半徑方向」高斯、低音駐波的半徑包絡、外緣固定的係數每圈只算一次；
+    //   ③ 漣漪用餘弦定理先算出「這一圈哪個角度範圍碰得到」，碰不到的點直接略過；④ 畫面座標直接套用畫筆的仿射矩陣，不配置陣列。
+    const cosA = new Float64Array(NS + 1);
+    const sinA = new Float64Array(NS + 1);
+    for (let q = 0; q <= NS; q++) {
+      cosA[q] = Math.cos((q / NS) * TAU);
+      sinA[q] = Math.sin((q / NS) * TAU);
+    }
+    const [m4, m5] = P(0, 0);
+    const [m0x, m1x] = P(1, 0);
+    const [m2x, m3x] = P(0, 1);
+    const m0 = m0x - m4;
+    const m1 = m1x - m5;
+    const m2 = m2x - m4;
+    const m3 = m3x - m5;
+    const W2 = RW * 2.5;
+    const ripK = 1 / (RW * RW * 0.5);
+    const ripC = bumps.map((b) => [Math.cos(b.a), Math.sin(b.a)]);
+    const nearF: number[] = [];
+    const ripLo: number[] = [];
+    const ripHi: number[] = [];
+    const ripIdx: number[] = [];
+    const bw0 = bassWave as { r: number; amp: number; lobes: number; ph: number } | null;
     for (let j = 0; j < NR; j++) {
       const r = R * (0.12 + (0.88 * j) / (NR - 1));
       const axial = axialOf(r);
       prepRing(r);
+      // 每圈不變的部分
+      nearF.length = 0;
+      for (const bb of near) {
+        const dr = r - bb.r;
+        nearF.push(bb.amp * Math.exp(-(dr * dr) / (2 * SR * SR)));
+      }
+      ripLo.length = 0;
+      ripHi.length = 0;
+      ripIdx.length = 0;
+      for (const bb of ripN) {
+        const rr = 2 * r * bb.r;
+        if (rr <= 0) continue;
+        const dmax = bb.ripR + W2;
+        const dmin = Math.max(0, bb.ripR - W2);
+        ripLo.push((r * r + bb.r * bb.r - dmax * dmax) / rr);
+        ripHi.push((r * r + bb.r * bb.r - dmin * dmin) / rr);
+        ripIdx.push(bumps.indexOf(bb));
+      }
+      const bwAmp = bw0 && bw0.amp > 0.05 ? bw0.amp * Math.exp(-((r - bw0.r) * (r - bw0.r)) / (2 * gap * gap * 0.5)) : 0;
+      const hatAmp = hat > 0.02 && r > rDrum * 0.9 ? R * 0.012 * hat : 0;
+      const hatPh = stepNow * 2.3 + r * 0.3;
+      const qq = r / R;
+      const edge = 1 - qq * qq * qq * qq * qq * qq;
       const pts: number[] = [];
       let run: number[] = [];
       let runMax = 0;
-      for (let s = 0; s <= NS; s++) {
-        const a = (s / NS) * TAU;
-        const h = height(r, a, axial);
-        const [x, y] = proj(Math.cos(a) * r, Math.sin(a) * r, h);
-        pts.push(x, y);
+      for (let q = 0; q <= NS; q++) {
+        const a = (q / NS) * TAU;
+        const ca = cosA[q];
+        const sa = sinA[q];
+        let h = axial;
+        for (let i = 0; i < near.length; i++) {
+          let da = Math.abs(a - near[i].a) % TAU;
+          if (da > Math.PI) da = TAU - da;
+          if (da > SA3) continue;
+          h += nearF[i] * Math.exp(-(da * da) / (2 * SA * SA));
+        }
+        for (let i = 0; i < ripIdx.length; i++) {
+          const bi = ripIdx[i];
+          const cd = ca * ripC[bi][0] + sa * ripC[bi][1];
+          if (cd < ripLo[i] || cd > ripHi[i]) continue;
+          const bb = bumps[bi];
+          const d = Math.sqrt(Math.max(0, r * r + bb.r * bb.r - 2 * r * bb.r * cd)) - bb.ripR;
+          if (d > W2 || d < -W2) continue;
+          h += bb.rip * Math.exp(-(d * d) * ripK);
+        }
+        if (bwAmp) h += bwAmp * Math.sin(bw0!.lobes * a + bw0!.ph);
+        if (hatAmp) h += hatAmp * Math.sin(a * 48 + hatPh);
+        h *= edge;
+        // 投影（同 proj）
+        const x = ca * r;
+        const y = sa * r;
+        const xr = x * ct - y * st;
+        const yr = x * st + y * ct;
+        const f = Dc / (Dc - yr * cph - h * sph);
+        const X = cx + xr * f;
+        const Y = cy + (yr * sph - h * cph) * f - hop;
+        pts.push(X, Y);
         if (h > Hc * 0.38) {
-          run.push(x, y);
+          run.push(X, Y);
           runMax = Math.max(runMax, h);
         } else if (run.length) {
           if (run.length >= 4) peaks.push({ pts: run, hmax: runMax });
@@ -560,7 +681,8 @@ export const music: Subject = {
       ctx.strokeStyle = j % 6 === 0 ? fogMain : fogStd;
       ctx.beginPath();
       for (let i = 0; i < pts.length; i += 2) {
-        const [qx, qy] = P(pts[i], pts[i + 1]);
+        const qx = m0 * pts[i] + m2 * pts[i + 1] + m4;
+        const qy = m1 * pts[i] + m3 * pts[i + 1] + m5;
         if (i === 0) ctx.moveTo(qx, qy);
         else ctx.lineTo(qx, qy);
       }

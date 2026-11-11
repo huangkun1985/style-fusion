@@ -233,6 +233,19 @@ console.log(`classics ok (${PIECES.length} 首)`);
   const cleaned = decodeMix(bad)?.a;
   ok(!!cleaned && cleaned.genre === 'auto' && cleaned.scheme === 'auto' && cleaned.piece === 'off' && cleaned.key === 11 && cleaned.tempo === 2, `壞的音樂設定要整理成合法值：${JSON.stringify(cleaned)}`);
   ok(cleanMusic(null).piece === 'off', 'cleanMusic(null)');
+  // 1.4.0：配樂模式、長度、段落形狀、墊底、精修也要往返；8 欄的舊碼讀成「配樂關、精修開」
+  const music2 = { ...musicOf(AUDIO_DEFAULT), genre: 'pop' as GenreId, arrange: true, arrLen: 45, arrShape: 'build' as const, bed: true, polish: false };
+  const back2 = decodeMix(encodeMix({ v: [{ id: 'flat', w: 1 }], m: [], s: 'ui', a: music2 }));
+  ok(!!back2 && JSON.stringify(back2.a) === JSON.stringify(music2), `配方碼往返（配樂）：${JSON.stringify(back2?.a)}`);
+  const old8 = 'SF1.' + Buffer.from(JSON.stringify({ v: 'flat:100', m: '', s: 'mascot', a: ['pop', 'midi', 'ui', 1, 5, 1, -1, 'off'] })).toString('base64url');
+  const o8 = decodeMix(old8)?.a;
+  ok(!!o8 && o8.arrange === false && o8.bed === false && o8.polish === true, `舊配方碼（8 欄）：${JSON.stringify(o8)}`);
+  // 1.2.1：原型鏈上的名稱（constructor、toString…）不能被當成合法的風格、主體、曲風、方案、名曲；微調參數要夾回範圍；權重 0 不是 100%
+  const evil = 'SF1.' + Buffer.from(JSON.stringify({ v: 'constructor:100,flat:0', m: 'toString:100', s: 'toString', t: { speed: 'abc', loopMul: 99 }, a: ['constructor', 'toString', 'valueOf', 1, 5, 1, -1, 'hasOwnProperty'] })).toString('base64url');
+  const ev = decodeMix(evil);
+  ok(!!ev && ev.v.length === 1 && ev.v[0].id === 'flat' && ev.v[0].w === 0.05 && ev.m.length === 0 && ev.s === 'mascot', `惡意配方碼的風格與主體：${JSON.stringify(ev)}`);
+  ok(!!ev && ev.t?.speed === 1 && ev.t?.loopMul === 2.5, `惡意配方碼的微調：${JSON.stringify(ev?.t)}`);
+  ok(!!ev?.a && ev.a.genre === 'auto' && ev.a.scheme === 'auto' && ev.a.pack === 'auto' && ev.a.piece === 'off', `惡意配方碼的音樂：${JSON.stringify(ev?.a)}`);
   console.log(`share code ok (${code.length} 字元)`);
 }
 console.log(fails ? `FAILED ${fails}` : 'ALL OK');

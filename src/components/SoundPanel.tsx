@@ -10,14 +10,15 @@ import { makeAudioFile, type AudioFileKind } from '../audio/files';
 import { GENRES } from '../audio/genres';
 import { SCHEME_INFO } from '../audio/render';
 import { PACK_INFO, SFX_KINDS } from '../audio/sfx';
-import { NOTE_NAMES, type GenreId, type PackId, type SchemeId, type Song, type TrackRole } from '../audio/types';
+import { SHAPE_INFO } from '../audio/arrange';
+import { NOTE_NAMES, type ArrShape, type GenreId, type PackId, type SchemeId, type Song, type TrackRole } from '../audio/types';
 import { clock } from '../engine/clock';
 import { saveBlob } from '../lib/platform';
 import { toggleSound, useEngineStatus } from '../lib/sound';
 import { useAudioPlan, useLookMove } from '../store/hooks';
 import { useStore } from '../store/store';
 import { ASPECT } from './Stage';
-import { Button, SectionTitle, Slider } from './ui';
+import { Button, SectionTitle, Segmented, Slider } from './ui';
 
 const ROLE_COLOR: Record<TrackRole, string> = {
   lead: '#6cd4ff',
@@ -47,7 +48,8 @@ function PianoRoll({ song }: { song: Song }) {
   const subject = useStore((s) => s.subject);
   const aspect = useStore((s) => s.aspect);
   const themeRev = useStore((s) => s.themeRev);
-  const cues = useMemo(() => new CueTracker(subject, move, tune, look, ASPECT[aspect]).cues, [subject, move, tune, look, aspect, themeRev]);
+  const fitAr = useStore((s) => s.fitAr);
+  const cues = useMemo(() => new CueTracker(subject, move, tune, look, aspect === 'fit' ? fitAr : ASPECT[aspect]).cues, [subject, move, tune, look, aspect, fitAr, themeRev]);
   const stRef = useRef({ song, cues });
   stRef.current = { song, cues };
 
@@ -157,6 +159,8 @@ export function SoundTab() {
   const effScheme = plan.scheme;
   const isImport = prefs.piece === 'import';
   const piece = prefs.piece === 'off' || isImport ? null : PIECE_BY_ID[prefs.piece];
+  // 配樂模式與墊底只用在自動作曲
+  const generated = !piece && !isImport;
   useStore((s) => s.midiRev); // 匯入或移除檔案時重畫
   const imp = getImportedMidi();
   const importMidi = useStore((s) => s.importMidi);
@@ -170,10 +174,12 @@ export function SoundTab() {
     if (err) showToast(`匯入失敗：${err}`);
   };
 
+  const [stemProg, setStemProg] = useState(0);
   const exportFile = async (kind: AudioFileKind) => {
     setBusy(kind);
+    setStemProg(0);
     try {
-      const { blob, name } = await makeAudioFile(kind, plan, song.seconds * Math.max(1, Math.ceil(8 / song.seconds)));
+      const { blob, name } = await makeAudioFile(kind, plan, song.seconds * Math.max(1, Math.ceil(8 / song.seconds)), setStemProg);
       saveBlob(blob, name);
       showToast(`已導出 ${name}`);
     } catch (e) {
@@ -424,6 +430,45 @@ export function SoundTab() {
         </div>
       </div>
 
+      {/* 配樂模式與混音（1.4.0） */}
+      <div className="flex flex-col gap-3">
+        <SectionTitle right={song.sections ? <span className="num text-[11px] text-fg-3">{song.seconds.toFixed(1)} 秒 · {song.bars} 小節</span> : undefined}>配樂與混音</SectionTitle>
+        <Toggle
+          id="snd-arrange"
+          on={prefs.arrange && generated}
+          disabled={!generated}
+          onChange={(v) => setAudio({ arrange: v })}
+          label="配樂模式"
+          desc={`整首有前奏、展開、回落的完整配樂（不是一小段循環），長度自己定；適合配影片、墊在口播底下。${generated ? '' : '名曲與匯入的 MIDI 照原曲，不能用。'}`}
+        />
+        {prefs.arrange && generated && (
+          <div className="flex flex-col gap-2.5 rounded-xl border border-line bg-panel-2 p-3">
+            <Slider id="snd-arrlen" label="長度" min={8} max={180} step={1} value={prefs.arrLen} onChange={(x) => setAudio({ arrLen: Math.round(x) })} format={(x) => `約 ${Math.round(x)} 秒 → 實際 ${song.seconds.toFixed(1)} 秒`} tone="mot" />
+            <Segmented
+              id="snd-shape"
+              size="sm"
+              value={prefs.arrShape}
+              onChange={(v) => setAudio({ arrShape: v })}
+              className="w-full [&>button]:flex-1"
+              options={(Object.keys(SHAPE_INFO) as ArrShape[]).map((k) => ({ value: k, label: SHAPE_INFO[k].name, title: SHAPE_INFO[k].desc }))}
+            />
+            <p className="min-h-[2.4rem] text-[11px] leading-relaxed text-fg-3">{SHAPE_INFO[prefs.arrShape].desc}</p>
+            <SectionBar song={song} />
+            <p className="text-[11px] leading-relaxed text-fg-3">
+              長度會落在整數小節上{prefs.sync ? '，而且是動畫循環的整數倍（在上面「節奏與調性」關掉對齊，就能更接近你要的秒數）' : ''}。導出影片時「長度」選「整首」就能完整收錄；也可以導出分軌，進剪輯軟體再對口播微調。
+            </p>
+          </div>
+        )}
+        <Toggle id="snd-bed" on={prefs.bed && generated} disabled={!generated} onChange={(v) => setAudio({ bed: v })} label="墊底（不搶口播）" desc="拿掉主旋律與副旋律、琶音收小、鼓只留大鼓與踩鈸；精修開著時再把 2.5 kHz 附近的人聲頻段讓出來。" />
+        <Toggle
+          id="snd-polish"
+          on={prefs.polish}
+          onChange={(v) => setAudio({ polish: v })}
+          label="精修編曲與混音"
+          desc="每個音的力度微調（避免機器味）；弦樂、木管、銅管依力度柔和起音；每一軌的響度對齊到同一個水準，再加上 EQ 與輕壓縮（後兩項在 MIDI 真實樂器方案）。關掉＝1.2 版原本的聲音，可以來回比較。"
+        />
+      </div>
+
       {/* 音效 */}
       <div>
         <SectionTitle>音效包</SectionTitle>
@@ -463,9 +508,49 @@ export function SoundTab() {
           <ExportBtn busy={busy === 'bgm-wav'} onClick={() => void exportFile('bgm-wav')} title="WAV 循環" sub="只有音樂，可無縫循環" />
           <ExportBtn busy={busy === 'mid'} onClick={() => void exportFile('mid')} title="MIDI (.mid)" sub="標準 MIDI，GM 音色" />
           <ExportBtn busy={busy === 'xm'} onClick={() => void exportFile('xm')} title="XM 模組 (.xm)" sub="用 OpenMPT 等追蹤器開啟" />
+          <ExportBtn busy={busy === 'stems'} onClick={() => void exportFile('stems')} title="分軌 (.zip)" sub={busy === 'stems' && stemProg > 0 ? `渲染中 ${Math.round(stemProg * 100)}%` : '每個聲部一個 WAV＋MIDI'} />
         </div>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-fg-3">影片導出（MP4）時，會自動把這裡的音樂與音效一起封裝進去。.xm 的速度必須是整數 BPM，所以長度可能和動畫有 0.5% 內的差異。</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-fg-3">影片導出（MP4／WebM）時，會自動把這裡的音樂與音效一起封裝進去。分軌是每個聲部各一個等長的 WAV（含各自的殘響），疊在一起就是混音，方便進剪輯或編曲軟體再加工。.xm 的速度必須是整數 BPM，所以長度可能和動畫有 0.5% 內的差異。</p>
       </div>
+    </div>
+  );
+}
+
+/** 開關＋說明（說明固定在標題下方，開關在右，點了不會改變排版） */
+function Toggle({ id, on, onChange, label, desc, disabled }: { id: string; on: boolean; onChange: (v: boolean) => void; label: string; desc: string; disabled?: boolean }) {
+  return (
+    <label htmlFor={id} className={`flex items-start justify-between gap-3 text-[13px] ${disabled ? 'opacity-55' : ''}`}>
+      <span className="min-w-0">
+        {label}
+        <span className="mt-0.5 block text-[11px] leading-relaxed text-fg-3">{desc}</span>
+      </span>
+      <input id={id} type="checkbox" checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-[var(--mot)]" />
+    </label>
+  );
+}
+
+/** 配樂的段落時間軸：每一段的名稱與起訖時間（寬度依小節數） */
+function SectionBar({ song }: { song: Song }) {
+  const secs = song.sections ?? [];
+  const barSec = song.seconds / Math.max(1, song.bars);
+  const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+  // 相鄰同名的段落（例如「展開」前後兩半）合併顯示
+  const merged: { name: string; bar: number; bars: number; peak: boolean }[] = [];
+  for (const s of secs) {
+    const last = merged[merged.length - 1];
+    if (last && last.name === s.name) last.bars += s.bars;
+    else merged.push({ name: s.name, bar: s.bar, bars: s.bars, peak: s.kind === 'peak' });
+  }
+  return (
+    <div className="flex h-11 w-full gap-px overflow-hidden rounded-md" role="img" aria-label={merged.map((m) => `${m.name} ${fmt(m.bar * barSec)} 到 ${fmt((m.bar + m.bars) * barSec)}`).join('，')}>
+      {merged.map((m) => (
+        <div key={m.bar} className={`flex min-w-0 flex-col justify-center px-1.5 ${m.peak ? 'bg-mot-soft' : 'bg-raise'}`} style={{ flex: `${m.bars} 1 0` }}>
+          <span className="truncate text-[11px] font-semibold text-fg">{m.name}</span>
+          <span className="num truncate text-[10px] text-fg-3">
+            {fmt(m.bar * barSec)}–{fmt((m.bar + m.bars) * barSec)}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

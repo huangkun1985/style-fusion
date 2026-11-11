@@ -1,5 +1,5 @@
 // 標準 MIDI 檔（SMF format 1）輸出：速度、拍號、每軌音色（Program Change）、鼓走第 10 軌道。
-import { stepToSec } from './compose';
+import { stepToSec } from './songTime';
 import type { Song } from './types';
 
 const PPQ = 480;

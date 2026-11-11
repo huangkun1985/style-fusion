@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { darken, lighten, mix } from '../../../color';
 import { clamp, hash, lerp, TAU, wrap } from '../../../util';
-import { blocks, type Block } from '../../blocks';
+import { blocks as blocks0, solidSet, type Block } from '../../blocks';
 import { motion3d } from '../../common';
 import type { BuildCtx, SceneInst } from '../../types';
 
@@ -96,6 +96,9 @@ export function buildIsland2({ look, kit }: BuildCtx): SceneInst {
   const world = new THREE.Group();
   root.add(world);
   const B = islandBlocks();
+  // 玻璃材質：整格方塊彼此相貼的面不畫（見 blocks.ts）；其他材質照舊
+  const solid = solidSet(B.grassA, B.grassB, B.path, B.sand, B.dirt, B.stone, B.wall, B.roof, B.chimney, B.tower, B.towerRoof, B.trunk, B.leaves, B.trunk2, B.leaves2, B.pineTrunk, B.pine, B.pineTrunk2, B.isletTop, B.isletDirt, B.isletTrunk, B.isletLeaves);
+  const blocks = (k: typeof kit, list: Block[], color: string, scale = 1) => blocks0(k, list, color, scale, { solid });
   const grass = P.q;
   world.add(blocks(kit, B.grassA, lighten(grass, 0.03)));
   world.add(blocks(kit, B.grassB, darken(grass, 0.04)));

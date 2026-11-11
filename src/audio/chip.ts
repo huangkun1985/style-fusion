@@ -388,7 +388,7 @@ export async function renderChip(song: Song, scheme: ChipScheme, opts: RenderOpt
   const out = foldTail(mix, n);
   removeMean(out.l);
   removeMean(out.r);
-  master(out, 0.12);
+  if (!opts.raw) master(out, 0.12);
   return out;
 }
 

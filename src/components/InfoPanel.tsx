@@ -8,7 +8,7 @@ import { GENRES } from '../audio/genres';
 import { SCHEME_INFO } from '../audio/render';
 import { PACK_INFO } from '../audio/sfx';
 import { MODE_NAME, type Mode } from '../audio/theory';
-import { NOTE_NAMES } from '../audio/types';
+import { NOTE_NAMES, type SectionKind } from '../audio/types';
 import { round } from '../engine/util';
 import { copyText } from '../lib/platform';
 import { useAudioPlan, useLookMove } from '../store/hooks';
@@ -349,15 +349,18 @@ function TuneTab() {
   );
 }
 
+const SECTION_EN: Record<SectionKind, string> = { intro: 'intro', build: 'build', build2: 'build', peak: 'peak', outro: 'outro', rise1: 'rise', rise2: 'rise', body: 'body' };
+
 /** 目前混合對應的聲音規格（給 JSON 與 Claude 提示詞用） */
 function useSoundSpec(): SoundSpec | null {
   const { plan } = useAudioPlan();
   const { look, move, tune } = useLookMove();
   const subject = useStore((s) => s.subject);
   const aspect = useStore((s) => s.aspect);
+  const fitAr = useStore((s) => s.fitAr);
   return useMemo(() => {
     const L = plan.animSeconds;
-    const cues = plan.pack ? new CueTracker(subject, move, tune, look, ASPECT[aspect]).cues.map((c) => ({ t: round(c.u * L, 2), kind: c.kind })) : [];
+    const cues = plan.pack ? new CueTracker(subject, move, tune, look, aspect === 'fit' ? fitAr : ASPECT[aspect]).cues.map((c) => ({ t: round(c.u * L, 2), kind: c.kind })) : [];
     return {
       title: plan.song.title,
       genre: plan.genreLabel,
@@ -366,8 +369,15 @@ function useSoundSpec(): SoundSpec | null {
       bpm: Math.round(plan.song.bpm),
       key: `${NOTE_NAMES[plan.song.key]} ${MODE_NAME[plan.song.mode as Mode] ?? plan.song.mode}`,
       cues,
+      arrangement: plan.song.sections
+        ? {
+            seconds: round(plan.song.seconds, 2),
+            bed: !!plan.song.bed,
+            sections: plan.song.sections.map((x) => ({ name: x.name, en: SECTION_EN[x.kind], from: round((x.bar * plan.song.seconds) / plan.song.bars, 2), to: round(((x.bar + x.bars) * plan.song.seconds) / plan.song.bars, 2) })),
+          }
+        : undefined,
     };
-  }, [plan, look, move, tune, subject, aspect]);
+  }, [plan, look, move, tune, subject, aspect, fitAr]);
 }
 
 const CODE_GUIDE: Record<'css' | 'gsap' | 'ae' | 'json', { badge: string; who: string; what: string; how: string[] }> = {

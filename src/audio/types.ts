@@ -98,7 +98,20 @@ export interface AudioPrefs {
   /** 匯入的 MIDI 要取哪一段：從第幾小節開始（0 起算）、取幾小節（0＝自動） */
   midiStart: number;
   midiBars: number;
+  /** 配樂模式（1.4.0）：整首有段落結構（前奏 → 展開 → 回落），長度自訂，聲部依段落層層進出；關閉＝與動畫對齊的循環 */
+  arrange: boolean;
+  /** 配樂長度（秒） */
+  arrLen: number;
+  /** 段落形狀 */
+  arrShape: ArrShape;
+  /** 墊底（不搶口播）：拿掉主旋律、中頻讓位給人聲 */
+  bed: boolean;
+  /** 精修編曲與混音（1.4.0）：力度微調、漸強漸弱、逐軌響度對齊與效果鏈；關閉＝1.2 原版的聲音（比較用） */
+  polish: boolean;
 }
+
+/** 配樂的段落形狀：arc 三段（前奏、展開、回落）；build 四段（前奏、展開、高潮、回落）；rise 一路推進；steady 平穩墊底 */
+export type ArrShape = 'arc' | 'build' | 'rise' | 'steady';
 
 export const AUDIO_DEFAULT: AudioPrefs = {
   on: false,
@@ -116,6 +129,11 @@ export const AUDIO_DEFAULT: AudioPrefs = {
   piece: 'off',
   midiStart: 0,
   midiBars: 0,
+  arrange: false,
+  arrLen: 30,
+  arrShape: 'arc',
+  bed: false,
+  polish: true,
 };
 
 export type TrackRole = 'lead' | 'arp' | 'bass' | 'pad' | 'chord' | 'counter' | 'perc';
@@ -174,6 +192,22 @@ export interface Song {
   animLoops: number;
   /** 每次動畫循環是否剛好整數拍 */
   beatLocked: boolean;
+  /** 配樂模式的段落（循環的歌沒有） */
+  sections?: Section[];
+  /** 精修（1.4.0）：渲染時加上力度相關的起音、逐軌響度對齊與效果鏈 */
+  polish?: boolean;
+  /** 墊底（不搶口播）：混音時中頻讓位 */
+  bed?: boolean;
+}
+
+export type SectionKind = 'intro' | 'build' | 'build2' | 'peak' | 'outro' | 'rise1' | 'rise2' | 'body';
+export interface Section {
+  kind: SectionKind;
+  /** 顯示用名稱（前奏、展開、高潮、回落…） */
+  name: string;
+  /** 從第幾小節開始（0 起算）、共幾小節 */
+  bar: number;
+  bars: number;
 }
 
 /** 動畫裡的音效提示點 */

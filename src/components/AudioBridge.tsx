@@ -11,13 +11,14 @@ export function AudioBridge() {
   const { plan, prefs, subject, tune } = useAudioPlan();
   const { look, move } = useLookMove();
   const aspect = useStore((s) => s.aspect);
+  const fitAr = useStore((s) => s.fitAr);
 
   // 「音樂視覺化」主體讀這首歌（不論聲音開不開，畫面都跟著會播的那首）
   setLiveSong(plan.song);
 
   useEffect(() => {
-    audioEngine.configure({ prefs, plan, subject, move, tune, look, aspect: ASPECT[aspect] });
-  }, [prefs, plan, subject, move, tune, look, aspect]);
+    audioEngine.configure({ prefs, plan, subject, move, tune, look, aspect: aspect === 'fit' ? fitAr : ASPECT[aspect] });
+  }, [prefs, plan, subject, move, tune, look, aspect, fitAr]);
 
   useEffect(() => {
     let raf = 0;

@@ -8,6 +8,9 @@ import { hash, smooth, TAU } from '../../../util';
 import { motion3d } from '../../common';
 import type { BuildCtx, SceneInst } from '../../types';
 
+/** 合併幾何前都轉成非索引（二十面體本來就是非索引，再轉一次 three 會在主控台警告） */
+const unindex = (g: THREE.BufferGeometry) => (g.index ? g.toNonIndexed() : g);
+
 const PERIOD = 26;
 const WIDTH = 46;
 const DEPTH = 120;
@@ -159,7 +162,7 @@ export function buildTerrain2({ look, kit }: BuildCtx): SceneInst {
       c1.translate(x, y + 0.9 * s, z);
       const c2 = paint(new THREE.ConeGeometry(0.46 * s, 0.9 * s, 6), c);
       c2.translate(x, y + 1.55 * s, z);
-      parts.push(trunk.toNonIndexed(), c1.toNonIndexed(), c2.toNonIndexed());
+      parts.push(unindex(trunk), unindex(c1), unindex(c2));
     }
     if (parts.length) {
       const merged = mergeGeometries(parts, false);
@@ -242,12 +245,12 @@ export function buildTerrain2({ look, kit }: BuildCtx): SceneInst {
         g.scale(1, 0.7, 1);
         g.rotateY(hash(cell, 44, 7) * 6);
         g.translate(x, y + r * 0.3, z);
-        rockParts.push(paintAll(g.toNonIndexed(), new THREE.Color(mix(P.r, P.ink, 0.25 + hash(cell, 45, 7) * 0.2))));
+        rockParts.push(paintAll(unindex(g), new THREE.Color(mix(P.r, P.ink, 0.25 + hash(cell, 45, 7) * 0.2))));
       } else if (t < 0.4) {
         for (let k = 0; k < 4; k++) {
           const g = new THREE.BoxGeometry(0.12, 0.12, 0.12);
           g.translate(x + (hash(cell, 50 + k, 7) - 0.5) * 1.1, y + 0.09, z + (hash(cell, 60 + k, 7) - 0.5) * 1.1);
-          flowerParts.push(paintAll(g.toNonIndexed(), flowerCols[(cell + k) % 4]));
+          flowerParts.push(paintAll(unindex(g), flowerCols[(cell + k) % 4]));
         }
       }
     }

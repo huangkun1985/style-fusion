@@ -35,6 +35,15 @@
         "--strictPort"
       ],
       "port": 4180
+    },
+    {
+      "name": "style-fusion-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "preview:web"
+      ],
+      "port": 4181
     }
   ]
 }

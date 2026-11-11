@@ -2,8 +2,9 @@
 // 同一份歌曲也能導出標準 MIDI 檔（見 midi.ts），在任何 GM 音源裡播放。
 import { clamp } from '../engine/util';
 import type { RenderOpts } from './chip';
-import { Noise, Svf, foldTail, freeverb, master, newStereo, noteSpan, panGains, removeMean, yieldNow, type Stereo } from './dsp';
+import { Noise, Svf, activeLoudness, biquad, compress, foldTail, freeverb, master, newStereo, noteSpan, panGains, removeMean, yieldNow, type Stereo } from './dsp';
 import { CALIBRATION } from './calibration';
+import { MIX_TARGET } from './mixTargets';
 import { ROLE_MIX, SEND, ensureSamplesFor, sampledDrum, sampledModel } from './sampled';
 import { mtof } from './theory';
 import type { Song, TrackRole } from './types';
@@ -655,6 +656,91 @@ function drum(buf: Float32Array, sr: number, start: number, note: number, vel: n
   }
 }
 
+// ---------- 精修（1.4.0）：表情與逐軌混音 ----------
+
+/**
+ * 力度相關的起音（像 SFZ 的 ampeg_vel2attack）：擦弦樂器的長音，越輕起音越慢、越柔（最慢約 0.3 秒）；
+ * 木管銅管也稍微柔一點；鍵盤、撥弦、打擊照原本的取樣起音。
+ */
+function expressiveAttack(program: number, base: number, vel: number, dur: number): number {
+  if (dur < 0.3) return base;
+  if (program >= 40 && program <= 51) return Math.max(base, Math.min(dur * 0.45, 0.08 + 0.22 * (1 - vel)));
+  if (program >= 56 && program <= 79) return Math.max(base, Math.min(dur * 0.3, 0.03 + 0.08 * (1 - vel)));
+  return base;
+}
+
+/** 各聲部的高通頻率（讓低頻只留給低音與大鼓，混音才不會糊） */
+const HP: Record<TrackRole, number> = { bass: 35, perc: 30, chord: 90, pad: 160, arp: 220, lead: 120, counter: 140 };
+
+/** 每一軌的效果鏈：高通、各聲部的修飾、墊底時人聲頻段讓位、低音／鼓／和弦的輕壓縮 */
+function trackChain(buf: Float32Array, sr: number, r: TrackRole, bed: boolean) {
+  biquad(buf, sr, 'highpass', HP[r], 0.7);
+  if (r === 'pad') biquad(buf, sr, 'peaking', 350, 0.9, -2); // 鋪底讓出低中頻
+  if (r === 'bass') biquad(buf, sr, 'lowpass', 4500, 0.7);
+  if (bed && r !== 'perc' && r !== 'bass') biquad(buf, sr, 'peaking', 2500, 0.9, -4); // 墊底：2.5 kHz 附近讓給人聲
+  if (r === 'bass' || r === 'perc' || r === 'chord') {
+    const L = activeLoudness(buf, sr);
+    if (L > -100) compress(buf, sr, L + (r === 'perc' ? 9 : 6), r === 'perc' ? 2.5 : 3);
+  }
+}
+
+/** 精修的渲染：每一軌先單獨渲染、過效果鏈、量「有聲部分」的響度，對齊到該聲部的目標電平，再加總、送殘響 */
+async function renderPolished(song: Song, opts: RenderOpts, sr: number, n: number, tail: number, dry: Stereo, wet: Stereo, sampled: boolean, nz: Noise, scratch: Float32Array) {
+  const synthDrumGain = sampled ? 0.6 : 1;
+  const buf = new Float32Array(n + tail);
+  const probe = (globalThis as { __mixProbe?: { role: TrackRole; L: number; genre: string }[] }).__mixProbe;
+  let drumCount = 0;
+  for (const tr of song.tracks) {
+    const r: TrackRole = tr.drum ? 'perc' : tr.role;
+    const [gl, gr] = panGains(tr.pan);
+    const send = SEND[tr.role] ?? 0.2;
+    buf.fill(0);
+    if (tr.drum) {
+      for (const nt of tr.notes) {
+        const [s0] = noteSpan(song, nt);
+        const at = Math.round(s0 * sr);
+        if (!sampledDrum(buf, sr, at, nt.pitch, nt.vel, tr.kit ?? 'hybrid', drumCount++)) drum(buf, sr, at, nt.pitch, nt.vel * synthDrumGain, nz);
+      }
+      for (let i = 0; i < buf.length; i++) buf[i] *= tr.gain * 0.9;
+    } else {
+      const model = sampledModel(tr.program) ?? modelOf(tr.program);
+      const cal = CALIBRATION[tr.program] ?? 1;
+      const mg = tr.gain * model.gain * cal * (sampledModel(tr.program) ? ROLE_MIX[tr.role] : 1);
+      for (const nt of tr.notes) {
+        const [s0, s1] = noteSpan(song, nt);
+        const start = Math.round(s0 * sr);
+        const dur = Math.max(0.03, s1 - s0);
+        const len = Math.min(Math.ceil((dur + model.rel) * sr), scratch.length, n + tail - start);
+        if (len <= 0) continue;
+        scratch.fill(0, 0, len);
+        model.render({ s: scratch, n: len, sr, f: mtof(nt.pitch), vel: nt.vel, dur, nz });
+        const nAtt = Math.max(1, Math.round(expressiveAttack(tr.program, model.att, nt.vel, dur) * sr));
+        const nDur = Math.round(dur * sr);
+        const nRel = Math.max(1, Math.round(model.rel * sr));
+        for (let i = 0; i < len; i++) {
+          let g = i < nAtt ? i / nAtt : 1;
+          if (i > nDur) g *= Math.max(0, 1 - (i - nDur) / nRel);
+          buf[start + i] += scratch[i] * g * mg * nt.vel;
+        }
+      }
+    }
+    trackChain(buf, sr, r, !!song.bed);
+    const L = activeLoudness(buf, sr);
+    let k = 1;
+    if (probe) probe.push({ role: r, L, genre: song.genre });
+    else if (L > -100) k = Math.pow(10, Math.max(-9, Math.min(9, MIX_TARGET[r] + (song.bed && r === 'perc' ? -3 : 0) - L)) / 20);
+    for (let i = 0; i < buf.length; i++) {
+      const v = buf[i] * k;
+      if (v === 0) continue;
+      dry.l[i] += v * gl;
+      dry.r[i] += v * gr;
+      wet.l[i] += v * send * gl;
+      wet.r[i] += v * send * gr;
+    }
+    if (opts.yieldEvery) await yieldNow();
+  }
+}
+
 // ---------- 主渲染 ----------
 
 export async function renderGm(song: Song, opts: RenderOpts): Promise<Stereo> {
@@ -670,7 +756,9 @@ export async function renderGm(song: Song, opts: RenderOpts): Promise<Stereo> {
   // 取樣鼓的峰值約 0.4–0.6，合成鼓要降到同一個量級才不會蓋過旋律
   const synthDrumGain = sampled ? 0.6 : 1;
   let drumCount = 0;
-  for (const tr of song.tracks) {
+  // 精修（1.4.0）走逐軌混音；關閉精修就是 1.2 原版的聲音（下面這段原封不動，供比較）
+  if (song.polish) await renderPolished(song, opts, sr, n, tail, dry, wet, sampled, nz, scratch);
+  else for (const tr of song.tracks) {
     const [gl, gr] = panGains(tr.pan);
     const send = SEND[tr.role] ?? 0.2;
     if (tr.drum) {

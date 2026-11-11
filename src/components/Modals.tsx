@@ -8,11 +8,12 @@ import { MOTION_MAP } from '../data/motion';
 import type { MCat, MotionStyle, VCat, VisualStyle } from '../data/schema';
 import { VISUAL_MAP } from '../data/visual';
 import { FX } from '../engine/fx';
+import { loopSeconds } from '../engine/loop';
 import { SUBJECTS, SUBJECT_ORDER } from '../engine/subjects';
 import type { SubjectId } from '../engine/types';
 import { canMp4, estimateFrames, runExport, type ExportFormat } from '../lib/exporter';
 import { inArtifact, saveBlob } from '../lib/platform';
-import { styleSpec, useLookMove } from '../store/hooks';
+import { styleSpec, useAudioPlan, useLookMove } from '../store/hooks';
 import { encodeMix, musicOf } from '../store/share';
 import { useStore } from '../store/store';
 import { SUBJECT_ICON } from './icons';
@@ -169,6 +170,7 @@ export function ExportModal() {
   const aspect = useStore((s) => s.aspect);
   const audioPrefs = useStore((s) => s.audio);
   const { look, move, tune } = useLookMove();
+  const { plan } = useAudioPlan();
   const [fmt, setFmt] = useState<ExportFormat>('gif');
   const [short, setShort] = useState('480');
   const [fps, setFps] = useState('24');
@@ -185,7 +187,14 @@ export function ExportModal() {
   const sh = parseInt(short);
   const w = Math.round(ar >= 1 ? sh * ar : sh);
   const h = Math.round(ar >= 1 ? sh : sh / ar);
-  const frames = estimateFrames({ subject, move, tune, fps: parseInt(fps), loops: parseInt(loops) });
+  // 音樂比動畫循環長（音樂視覺化、配樂模式、名曲…）時，可以導出「整首歌」：畫面與音樂都完整走一遍、首尾接得起來
+  const animL = loopSeconds(SUBJECTS[subject], move, tune);
+  const songSec = plan.song.seconds;
+  const songLonger = songSec > animL * 1.02;
+  const useSong = loops === 'song' && songLonger;
+  const seconds = useSong ? songSec : undefined;
+  const nLoops = useSong ? 1 : Math.max(1, parseInt(loops) || 1);
+  const frames = estimateFrames({ subject, move, tune, fps: parseInt(fps), loops: nLoops, seconds });
   const close = () => {
     abort.current?.abort();
     set({ exportOpen: false });
@@ -197,10 +206,15 @@ export function ExportModal() {
       setErr('');
       setProg(0);
       setPhase('');
-    } else setWithAudio(useStore.getState().audio.on);
+    } else {
+      setWithAudio(useStore.getState().audio.on);
+      // 音樂視覺化與配樂模式：畫面跟著整首歌走，預設導出整首
+      const st = useStore.getState();
+      if (st.subject === 'music' || st.audio.arrange) setLoops('song');
+    }
   }, [open]);
   const hasSound = audioPrefs.bgm || audioPrefs.sfx;
-  const audioWanted = fmt === 'mp4' && withAudio && hasSound;
+  const audioWanted = (fmt === 'mp4' || fmt === 'webm') && withAudio && hasSound;
   const start = async () => {
     setBusy(true);
     setErr('');
@@ -217,7 +231,7 @@ export function ExportModal() {
       }
       setPhase(audio ? '逐幀渲染並封裝影音…' : '');
       const { blob, name, note } = await runExport(
-        { format: fmt, subject, look, move, tune, w: w - (w % 2), h: h - (h % 2), fps: parseInt(fps), loops: parseInt(loops), transparent: transparent && ['png', 'zip', 'sprite'].includes(fmt), audio },
+        { format: fmt, subject, look, move, tune, w: w - (w % 2), h: h - (h % 2), fps: parseInt(fps), loops: nLoops, seconds, transparent: transparent && ['png', 'zip', 'sprite'].includes(fmt), audio },
         setProg,
         abort.current.signal,
       );
@@ -286,19 +300,31 @@ export function ExportModal() {
                 <Segmented id="ex-fps" size="sm" value={fps} onChange={setFps} options={['12', '24', '30', '60'].map((x) => ({ value: x, label: x }))} />
               </div>
               <div className="flex flex-col gap-1">
-                <span className="text-xs text-fg-2">循環次數</span>
-                <Segmented id="ex-loops" size="sm" value={loops} onChange={setLoops} options={['1', '2', '3'].map((x) => ({ value: x, label: `${x} 次` }))} />
+                <span className="text-xs text-fg-2">長度</span>
+                <Segmented
+                  id="ex-loops"
+                  size="sm"
+                  value={useSong || loops !== 'song' ? loops : '1'}
+                  onChange={setLoops}
+                  options={[
+                    ...['1', '2', '3'].map((x) => ({ value: x, label: `${x} 次`, title: `動畫循環 ${x} 次（${(animL * +x).toFixed(1)} 秒）` })),
+                    ...(songLonger ? [{ value: 'song', label: '整首', title: `跟整首音樂一樣長（${songSec.toFixed(1)} 秒）：畫面與音樂都完整走一遍，首尾接得起來` }] : []),
+                  ]}
+                />
               </div>
             </>
           )}
         </div>
-        {fmt === 'mp4' && (
+        {(fmt === 'mp4' || fmt === 'webm') && (
           <div className="flex flex-col gap-1">
             <label htmlFor="ex-audio" className="flex items-center gap-2 text-[13px] text-fg-2">
               <input id="ex-audio" type="checkbox" checked={withAudio && hasSound} disabled={!hasSound} onChange={(e) => setWithAudio(e.target.checked)} className="size-4 accent-[var(--mot)]" />
               加入音樂與音效（用「聲音」分頁目前的設定）
             </label>
-            <p className="pl-6 text-[11px] leading-relaxed text-fg-3">{hasSound ? '音樂會從影片第 0 秒起對齊動畫，循環次數越多就重複越多次。' : '「聲音」分頁裡音樂與音效都已關閉，所以影片會是無聲的。'} GIF／WebM 沒有聲音軌。</p>
+            <p className="pl-6 text-[11px] leading-relaxed text-fg-3">
+              {hasSound ? `音樂會從影片第 0 秒起對齊動畫。${songLonger ? `這首音樂長 ${songSec.toFixed(1)} 秒，比動畫循環長；選「整首」才會完整收錄、首尾接得起來。` : ''}` : '「聲音」分頁裡音樂與音效都已關閉，所以影片會是無聲的。'}
+              {fmt === 'webm' ? ' WebM 是即時錄製，音軌和畫面一起錄。' : ''} GIF 沒有聲音軌。
+            </p>
           </div>
         )}
         {['png', 'zip', 'sprite'].includes(fmt) && (
@@ -309,6 +335,7 @@ export function ExportModal() {
         )}
         <p className="text-xs leading-relaxed text-fg-3">
           導出是逐幀離線渲染：不管電腦快慢，幀與幀之間的時間都精確。{move.fps ? `目前動效為 ${move.fps}fps 步進，導出幀率建議設為 ${move.fps} 的倍數。` : ''}
+          {fmt === 'gif' && frames / parseInt(fps) > 15 ? ' GIF 超過 15 秒檔案會很大，長片段建議用 MP4。' : ''}
           {inArtifact && ' 在 claude.ai 的預覽框裡，瀏覽器可能會擋下自動下載；若沒有出現檔案，請在本地版本導出。'}
         </p>
         {busy && phase && <p className="text-xs text-fg-2">{phase}</p>}
@@ -350,6 +377,8 @@ export function ShareModal() {
   const showToast = useStore((s) => s.showToast);
   const [paste, setPaste] = useState('');
   const code = useMemo(() => encodeMix({ v, m, s: subject, t: tune, a: musicOf(audio) }), [v, m, subject, tune, audio]);
+  // 直接雙擊開啟的本機檔案（file://）沒有可以分享的網址（origin 是 "null"）
+  const isFile = location.protocol === 'file:';
   const link = `${location.origin}${location.pathname}#mix=${code}`;
   return (
     <Modal open={open} onClose={() => set({ shareOpen: false })} title="配方碼與分享">
@@ -359,7 +388,7 @@ export function ShareModal() {
           <textarea id="share-code" readOnly value={code} rows={3} className="num w-full resize-none rounded-lg border border-line bg-panel-2 p-2 text-[11px] text-fg-2 outline-none" onFocus={(e) => e.target.select()} />
           <p className="mt-1 text-xs text-fg-3">配方碼包含全部風格、權重、主體、微調參數與音樂（曲風、名曲、聲音方案、調性、速度）。貼給同事，或在「我的收藏」貼上即可還原；舊版配方碼沒有音樂，載入時會保留你目前的音樂。</p>
         </div>
-        {!inArtifact && (
+        {!inArtifact && !isFile && (
           <div>
             <SectionTitle right={<CopyButton size="xs" text={link} label="複製連結" />}>分享連結</SectionTitle>
             <p className="flex items-center gap-2 truncate rounded-lg border border-line bg-panel-2 px-2 py-1.5 text-xs text-fg-3">
@@ -368,6 +397,7 @@ export function ShareModal() {
             </p>
           </div>
         )}
+        {isFile && <p className="text-xs leading-relaxed text-fg-3">現在是直接開啟本機檔案，連結只在你這台電腦有效，所以不提供分享連結；請把上面的配方碼傳給對方，或改用線上版分享。</p>}
         <div>
           <SectionTitle>載入別人的配方碼</SectionTitle>
           <div className="flex gap-2">

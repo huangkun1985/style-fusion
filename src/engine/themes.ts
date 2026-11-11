@@ -252,7 +252,7 @@ function parseLayer(raw: unknown, path: string, depth: number, I: Issues, ids: S
       else I.add(`${path}.align`, '要是 left、center 或 right');
     }
     if (raw.font !== undefined) {
-      if (typeof raw.font === 'string' && raw.font in FONTS) g.font = raw.font as FontId;
+      if (typeof raw.font === 'string' && Object.hasOwn(FONTS, raw.font)) g.font = raw.font as FontId;
       else I.add(`${path}.font`, `要是 ${Object.keys(FONTS).join('、')} 其中之一`);
     }
   }

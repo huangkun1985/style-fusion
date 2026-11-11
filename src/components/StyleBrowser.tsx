@@ -30,10 +30,15 @@ export function StyleBrowser({ cols = 2 }: { cols?: number }) {
   const [mode, setMode] = useState<ThumbMode>('solo');
   const [catOpen, setCatOpen] = useState(false);
   const stripRef = useRef<HTMLDivElement>(null);
-  // 收合時，讓目前選中的分類捲到看得見的位置
+  // 收合時，讓目前選中的分類捲到看得見的位置。只捲分類列本身：scrollIntoView 會連外層頁面一起捲，
+  // 手機版（風格庫在舞台下方）一打開或切換分頁，整頁就會往下跳
   useEffect(() => {
-    const el = stripRef.current?.querySelector('[aria-pressed="true"]');
-    if (el && !catOpen) (el as HTMLElement).scrollIntoView({ block: 'nearest', inline: 'center' });
+    const strip = stripRef.current;
+    const el = strip?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!strip || !el || catOpen) return;
+    const sr = strip.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    strip.scrollTo({ left: Math.max(0, strip.scrollLeft + er.left - sr.left - (sr.width - er.width) / 2) });
   }, [cat, kind, catOpen]);
   const q = useDeferredValue(search.trim());
   const cats = kind === 'v' ? VCATS : MCATS;

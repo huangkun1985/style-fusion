@@ -92,7 +92,8 @@ export const type2: Subject = {
     if (kp > 0.01 && ko < 1) {
       S.alpha = baseA * clamp(kp) * (1 - ko);
       const y = -Hh + 36;
-      const w = Math.max(half, 150) + 10;
+      // 窄畫面（直式）不能超出畫面：最多到邊界內 14 單位
+      const w = Math.min(env.Wu / 2 - 14, Math.max(half, 150) + 10);
       S.push();
       S.jitter(18, 0.6);
       tiny('MOTION DESIGN — VOL.08', -w, y, 11, 'ink', { a: 0.8 });
@@ -173,13 +174,22 @@ export const type2: Subject = {
     if (sp > 0.01 && so < 1) {
       S.alpha = baseA * clamp(sp) * (1 - so);
       const fnt = S.look.font === 'term' ? 'term' : 'brush'; // 像素字體沒有中文字，會退回很小的後備字；中文副標一律用粗宋體
+      // 窄畫面（直式 9:16）：副標與右側說明放不進同一行——副標依寬度縮小，說明改排在副標下方、靠左對齊
+      const narrow = half * 2 < 340;
+      const subSize = narrow ? clamp((half * 2) / 4.4, 22, cell > 1.2 ? 54 : 40) : cell > 1.2 ? 54 : 40;
       S.push();
       S.translate(-half, 96 + (1 - sp) * 24 - so * 16);
       S.jitter(19);
-      S.text(SUB, 0, 0, cell > 1.2 ? 54 : 40, 'ink', { align: 'left', font: fnt, flat: true, shadow: false });
+      S.text(SUB, 0, 0, subSize, 'ink', { align: 'left', font: fnt, flat: true, shadow: false });
       S.pop();
-      tiny('A creative platform shaped by', half, 88 + (1 - sp) * 18, 9.5, 'ink', { a: 0.6, align: 'right' });
-      tiny('movement, change & perspective.', half, 101 + (1 - sp) * 18, 9.5, 'ink', { a: 0.6, align: 'right' });
+      if (narrow) {
+        const ty = 96 + subSize * 0.62 + 16 + (1 - sp) * 18;
+        tiny('A creative platform shaped by', -half, ty, 9.5, 'ink', { a: 0.6, align: 'left' });
+        tiny('movement, change & perspective.', -half, ty + 13, 9.5, 'ink', { a: 0.6, align: 'left' });
+      } else {
+        tiny('A creative platform shaped by', half, 88 + (1 - sp) * 18, 9.5, 'ink', { a: 0.6, align: 'right' });
+        tiny('movement, change & perspective.', half, 101 + (1 - sp) * 18, 9.5, 'ink', { a: 0.6, align: 'right' });
+      }
     }
 
     // ═══ 跑馬燈環帶：底部一條深色帶，文字每圈剛好走一個單位（無縫循環）═══

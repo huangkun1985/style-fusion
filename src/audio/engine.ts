@@ -7,7 +7,7 @@ import { CueTracker } from './cues';
 import type { Stereo } from './dsp';
 import { mixdown } from './mixdown';
 import type { AudioPlan } from './plan';
-import { renderScheme } from './render';
+import { renderAsync } from './renderClient';
 import { synthSfx } from './sfx';
 import { AUDIO_DEFAULT, SAMPLE_RATE, type AudioPrefs, type SchemeId, type SfxKind } from './types';
 
@@ -79,6 +79,8 @@ class AudioEngine {
     };
   };
   getStatus = () => this.status;
+  /** 目前的作曲種子（分軌導出要用同一個種子渲染） */
+  seed = () => this.prefs.seed;
   private setStatus(p: Partial<EngineStatus>) {
     this.status = { ...this.status, ...p };
     for (const f of this.listeners) f();
@@ -106,7 +108,8 @@ class AudioEngine {
         this.ctx.onstatechange = () => this.setStatus({ ctxState: this.ctx?.state ?? 'none' });
         this.applyGains();
       }
-      if (this.ctx.state !== 'running') await this.ctx.resume();
+      // resume() 在沒有音訊輸出裝置等情況下可能一直不回應：最多等 2 秒，回報「還沒允許出聲」，讓介面有提示而不是按了沒反應
+      if (this.ctx.state !== 'running') await Promise.race([this.ctx.resume(), new Promise((r) => setTimeout(r, 2000))]);
       this.setStatus({ ctxState: this.ctx.state });
       if (this.pcm && !this.buf) this.makeBuffer(this.pcm);
       return this.ctx.state === 'running';
@@ -167,7 +170,8 @@ class AudioEngine {
     }
     const entry = { p: null as unknown as Promise<Stereo>, ms: 0 };
     const t0 = performance.now();
-    entry.p = renderScheme(plan.song, scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true }).then((pcm) => {
+    // 在背景執行緒渲染（B-11）：換曲風、換風格時介面不卡
+    entry.p = renderAsync(plan.song, scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, yieldEvery: true }).then((pcm) => {
       entry.ms = Math.round(performance.now() - t0);
       return pcm;
     });

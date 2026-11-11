@@ -48,6 +48,15 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** 本機儲存寫入失敗（空間已滿、被瀏覽器禁止）時通知；App 會跳一次提示，不再默默失敗 */
+const storageFailListeners = new Set<(key: string) => void>();
+export function onStorageFail(fn: (key: string) => void) {
+  storageFailListeners.add(fn);
+  return () => {
+    storageFailListeners.delete(fn);
+  };
+}
+
 export const safeStorage = {
   getItem(k: string): string | null {
     try {
@@ -56,11 +65,14 @@ export const safeStorage = {
       return null;
     }
   },
-  setItem(k: string, v: string) {
+  /** 寫入成功回傳 true；失敗（空間已滿、無痕模式等）回傳 false 並通知 onStorageFail */
+  setItem(k: string, v: string): boolean {
     try {
       localStorage.setItem(k, v);
+      return true;
     } catch {
-      /* 儲存失敗時忽略（無痕模式等） */
+      for (const f of storageFailListeners) f(k);
+      return false;
     }
   },
   removeItem(k: string) {

@@ -1,7 +1,8 @@
 // 開發用：把一個主體（v1 或 v2）在多個時間點畫成一張接觸表，方便逐幀檢查設計；畫完把 PNG 傳給本機小伺服器（recv.mjs）存成檔案，
 // 這樣可以用 Read 工具「看」圖（內建瀏覽器截圖常逾時）。用法見 scripts/design-sheet/README.md。
 // 網址參數：s=主體 id（custom＝自訂主題，配合 theme=檔案路徑；music 可加 genre=曲風）、v=1|2、style=圖像風格 id、m=動效風格 id、n=幾格、cols=幾欄、w=每格寬、t0/t1=起訖（0..1）、name=存檔名
-//          ?all=1 冒煙測試（全部主體×風格，錯誤記錄在 window.__errs）；?bench=1 每幀耗時（window.__bench）
+//          ?all=1 冒煙測試（全部主體×風格，錯誤記錄在 window.__errs）；?bench=1 每幀耗時（window.__bench）；?full=1 擴大冒煙（window.__full）；
+//          ?regress=1 視覺回歸（和基準圖比對，window.__regress）、?regress=save 重存基準圖（要開 recv.mjs）
 import { MOTION_MAP } from '../../src/data/motion';
 import { VISUAL_MAP } from '../../src/data/visual';
 import { preloadFonts } from '../../src/engine/fonts';
@@ -109,7 +110,7 @@ async function go() {
   const name = q.get('name') ?? `${subject}_${ver}_${style}`;
   await fetch(`http://localhost:5555/save?name=${name}`, { method: 'POST', body: cv.toDataURL('image/png') }).catch(() => undefined);
 }
-if (!q.get('all') && !q.get('bench')) void go();
+if (!q.get('all') && !q.get('bench') && !q.get('full') && !q.get('regress')) void go();
 
 if (q.get('all')) {
   void (async () => {
@@ -190,3 +191,137 @@ if (q.get('bench')) {
   }
   return res;
 };
+
+// ?full=1 擴大冒煙測試（1.2.1）：全部圖像風格 × 2D 主體、全部動效 × 2D 主體 × 5 個時間點、極端尺寸、全部 3D 材質 × 3D 主體、3D 運鏡；
+// v1／v2 都跑。結果在 window.__full（{ n, errs, blank, ms }）；約 40 秒，用 javascript_tool 分次讀。
+if (q.get('full')) {
+  void (async () => {
+    const t0 = performance.now();
+    const ids2d = ['mascot', 'ball', 'walk', 'ui', 'type', 'geo', 'chart', 'loader', 'logo', 'fireworks', 'weather', 'portrait', 'music', 'landscape', 'abstract'] as SubjectId[];
+    const ids3d = ['voxel', 'shapes3d', 'char3d', 'text3d', 'terrain3d', 'product3d'] as SubjectId[];
+    const v3 = Object.keys(VISUAL_MAP).filter((k) => VISUAL_MAP[k].cat === 'dim3d');
+    const v2d = Object.keys(VISUAL_MAP).filter((k) => !v3.includes(k));
+    const m3 = Object.keys(MOTION_MAP).filter((k) => MOTION_MAP[k].cat === 'cam3d');
+    const errs: string[] = [];
+    const blank: string[] = [];
+    let n = 0;
+    const move0 = resolveMove([], MOTION_MAP, tune);
+    const one = (cx: CanvasRenderingContext2D, w: number, h: number, id: SubjectId, lk: ReturnType<typeof resolveLook>, mv: ReturnType<typeof resolveMove>, t: number, tag: string, checkBlank = false) => {
+      try {
+        r.render(cx, w, h, { subject: id, look: lk, move: mv, tune, time: t * SUBJECTS[id].loop });
+        n++;
+        if (checkBlank) {
+          const d = cx.getImageData(0, 0, w, h).data;
+          const set = new Set<number>();
+          for (let i = 0; i < d.length; i += 16) set.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+          if (set.size < 3) blank.push(`${tag} colors=${set.size}`);
+        }
+      } catch (e) {
+        errs.push(`${tag}: ${(e as Error).message}`);
+      }
+    };
+    const mk2 = (w: number, h: number) => {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      return c.getContext('2d', { willReadFrequently: true })!;
+    };
+    for (const v of ['v2', 'v1'] as const) {
+      setSubjectVersion(v);
+      const cx = mk2(192, 102);
+      for (const id of ids2d) {
+        for (const st of v2d) one(cx, 192, 102, id, resolveLook([{ id: st, w: 1 }], VISUAL_MAP, tune), move0, 0.37, `${v} ${id} ${st}`);
+        const flat = resolveLook([{ id: 'flat', w: 1 }], VISUAL_MAP, tune);
+        for (const m of Object.keys(MOTION_MAP)) {
+          const mv = resolveMove([{ id: m, w: 1 }], MOTION_MAP, tune);
+          for (const t of [0, 0.21, 0.5, 0.77, 0.999]) one(cx, 192, 102, id, flat, mv, t, `${v} ${id} m=${m} t=${t}`);
+        }
+        for (const st of ['flat', 'popart', 'pixel8', 'cyberpunk', 'chalk', 'watercolor'].filter((x) => VISUAL_MAP[x])) {
+          const lk = resolveLook([{ id: st, w: 1 }], VISUAL_MAP, tune);
+          for (const [w, h] of [[108, 192], [150, 150], [260, 100], [48, 27]]) one(mk2(w, h), w, h, id, lk, move0, 0.5, `${v} ${id} ${st} ${w}x${h}`, w === 108);
+        }
+        await new Promise((res) => setTimeout(res, 0));
+      }
+      for (const id of ids3d) {
+        await r.ready(id);
+        for (const st of v3) {
+          const lk = resolveLook([{ id: st, w: 1 }], VISUAL_MAP, tune);
+          one(mk2(188, 100), 188, 100, id, lk, move0, 0.45, `${v} ${id} ${st}`, st !== 'dither3d');
+          one(mk2(90, 160), 90, 160, id, lk, move0, 0.45, `${v} ${id} ${st} 9:16`);
+        }
+        const lk = resolveLook([{ id: 'matte3d', w: 1 }], VISUAL_MAP, tune);
+        for (const m of m3) for (const t of [0.02, 0.5, 0.98]) one(mk2(150, 80), 150, 80, id, lk, resolveMove([{ id: m, w: 1 }], MOTION_MAP, tune), t, `${v} ${id} m=${m} t=${t}`);
+        await new Promise((res) => setTimeout(res, 0));
+      }
+    }
+    (window as unknown as { __full: unknown }).__full = { n, errs: errs.slice(0, 50), nErr: errs.length, blank: blank.slice(0, 30), nBlank: blank.length, ms: Math.round(performance.now() - t0) };
+  })();
+}
+
+// ?regress=1 視覺回歸（1.3.0）：固定的一組「主體 × 風格 × 時間點」畫成一張總表，和 baseline/atlas.png 逐格比對，
+// 差異大的格子列在 window.__regress（{ tiles, changed, ms }）。改了共用程式（brush、背景、後期…）後跑一次，確認沒有意外改到別的主體，
+// 尤其是 v1（使用者要拿來比較新舊，不能變）。真的要改外觀時：開 recv.mjs 到 scripts/design-sheet/baseline，再開 ?regress=save 重存基準圖。
+if (q.get('regress')) {
+  void (async () => {
+    const t0 = performance.now();
+    await document.fonts.ready;
+    const TW = 160;
+    const TH = 85;
+    const all = ['mascot', 'ball', 'walk', 'ui', 'type', 'geo', 'chart', 'loader', 'logo', 'fireworks', 'weather', 'portrait', 'music', 'landscape', 'abstract', 'voxel', 'shapes3d', 'char3d', 'text3d', 'terrain3d', 'product3d'] as SubjectId[];
+    const v1ids = ['mascot', 'ball', 'walk', 'ui', 'type', 'geo', 'chart', 'landscape', 'abstract', 'shapes3d', 'char3d', 'text3d', 'terrain3d', 'voxel'] as SubjectId[];
+    const jobs: { v: 'v1' | 'v2'; id: SubjectId; st: string; t: number }[] = [];
+    for (const id of all) for (const st of id.endsWith('3d') || id === 'voxel' ? ['cel3d', 'matte3d', 'wire3d'] : ['flat', 'pixel8', 'cyberpunk']) jobs.push({ v: 'v2', id, st, t: 0.35 });
+    for (const id of v1ids) jobs.push({ v: 'v1', id, st: id.endsWith('3d') || id === 'voxel' ? 'cel3d' : 'flat', t: 0.35 });
+    const cols = 10;
+    const rows = Math.ceil(jobs.length / cols);
+    const atlas = document.createElement('canvas');
+    atlas.width = cols * TW;
+    atlas.height = rows * TH;
+    const actx = atlas.getContext('2d', { willReadFrequently: true })!;
+    const c = document.createElement('canvas');
+    c.width = TW;
+    c.height = TH;
+    const cx = c.getContext('2d')!;
+    const move0 = resolveMove([], MOTION_MAP, tune);
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      setSubjectVersion(j.v);
+      await r.ready(j.id);
+      r.render(cx, TW, TH, { subject: j.id, look: resolveLook([{ id: j.st, w: 1 }], VISUAL_MAP, tune), move: move0, tune, time: j.t * SUBJECTS[j.id].loop });
+      actx.drawImage(c, (i % cols) * TW, Math.floor(i / cols) * TH);
+    }
+    setSubjectVersion('v2');
+    if (q.get('regress') === 'save') {
+      await fetch('http://localhost:5555/save?name=atlas', { method: 'POST', body: atlas.toDataURL('image/png') });
+      (window as unknown as { __regress: unknown }).__regress = { saved: jobs.length };
+      return;
+    }
+    const img = new Image();
+    const loaded = await new Promise<boolean>((res) => {
+      img.onload = () => res(true);
+      img.onerror = () => res(false);
+      img.src = `/scripts/design-sheet/baseline/atlas.png?${Date.now()}`;
+    });
+    if (!loaded || img.width !== atlas.width || img.height !== atlas.height) {
+      (window as unknown as { __regress: unknown }).__regress = { error: loaded ? '基準圖尺寸不同（格數變了）：請重存基準圖' : '找不到基準圖：先用 ?regress=save 存一份' };
+      return;
+    }
+    const b = document.createElement('canvas');
+    b.width = img.width;
+    b.height = img.height;
+    const bctx = b.getContext('2d', { willReadFrequently: true })!;
+    bctx.drawImage(img, 0, 0);
+    const changed: string[] = [];
+    for (let i = 0; i < jobs.length; i++) {
+      const x = (i % cols) * TW;
+      const y = Math.floor(i / cols) * TH;
+      const A = actx.getImageData(x, y, TW, TH).data;
+      const B = bctx.getImageData(x, y, TW, TH).data;
+      let k = 0;
+      for (let p = 0; p < A.length; p += 4) if (Math.abs(A[p] - B[p]) + Math.abs(A[p + 1] - B[p + 1]) + Math.abs(A[p + 2] - B[p + 2]) > 48) k++;
+      const pct = (k / (TW * TH)) * 100;
+      if (pct > 1) changed.push(`${jobs[i].v} ${jobs[i].id} ${jobs[i].st}: ${pct.toFixed(1)}%`);
+    }
+    (window as unknown as { __regress: unknown }).__regress = { tiles: jobs.length, changed, ms: Math.round(performance.now() - t0) };
+  })();
+}

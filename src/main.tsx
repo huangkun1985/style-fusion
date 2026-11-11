@@ -11,6 +11,13 @@ if (import.meta.env.DEV) {
   });
 }
 
+// 線上版（npm run build:web）才註冊離線快取；單檔版與開發模式不用
+if (import.meta.env.MODE === 'web' && 'serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => undefined);
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

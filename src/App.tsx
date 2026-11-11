@@ -14,6 +14,7 @@ import { clock } from './engine/clock';
 import { preloadFonts } from './engine/fonts';
 import { thumbs } from './engine/thumbs';
 import { mixSpec } from './store/hooks';
+import { onStorageFail } from './lib/platform';
 import { toggleSound } from './lib/sound';
 import { useMedia } from './lib/useMedia';
 import { useStore } from './store/store';
@@ -46,8 +47,13 @@ function MixerView() {
           <StyleBrowser />
         </aside>
         <section className="scroll-y flex min-h-0 flex-col gap-3 pr-1" aria-label="舞台">
-          <Stage />
-          <MixTray />
+          {/* 這一欄可以捲動：每一塊都不能被壓縮，否則舞台會被擠成 0 高、蓋住下面的內容 */}
+          <div className="shrink-0">
+            <Stage />
+          </div>
+          <div className="shrink-0">
+            <MixTray />
+          </div>
           <div className="flex h-[760px] shrink-0 flex-col rounded-xl border border-line bg-panel p-3">
             <InfoPanel />
           </div>
@@ -100,6 +106,17 @@ export default function App() {
     thumbs.invalidate();
   }, [thumbsAnimate, motionOverride]);
 
+  // 本機儲存寫不進去（空間已滿、被瀏覽器禁止）：提示一次，不要默默失敗、重新整理才發現東西不見
+  useEffect(() => {
+    let told = false;
+    return onStorageFail((key) => {
+      if (told) return;
+      told = true;
+      const what = key === 'sf-themes-v1' ? '匯入的主題' : key === 'sf-midi-v1' ? '匯入的 MIDI' : '收藏與設定';
+      useStore.getState().showToast(`瀏覽器的本機儲存空間已滿或被禁止，${what}這次沒有存下來；可以刪掉幾個匯入的主題或收藏再試`);
+    });
+  }, []);
+
   useEffect(() => {
     preloadFonts(() => thumbs.invalidate());
     // 網址帶 #mix=配方碼 時自動載入
@@ -131,7 +148,8 @@ export default function App() {
       // 焦點在按鈕或連結上時，空白鍵留給它原本的「點擊」行為
       if (e.code === 'Space' && t?.closest('button, a, [role="radio"]')) return;
       const s = useStore.getState();
-      if (s.view !== 'mixer' || s.detail || s.exportOpen || s.shareOpen) return;
+      // 任何彈出視窗（起點選擇、匯入主題、關於、導出、分享、風格詳情…）開著時，快捷鍵不作用在背後的舞台
+      if (s.view !== 'mixer' || s.detail || s.exportOpen || s.shareOpen || s.starterOpen || s.themeOpen || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       if (e.code === 'Space') {
         e.preventDefault();
         clock.play();

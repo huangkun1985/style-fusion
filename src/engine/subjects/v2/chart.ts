@@ -27,15 +27,23 @@ const DATA = Array.from({ length: N }, (_, i) => {
 function layout(Wu: number) {
   const portrait = Wu < 520;
   const CW = portrait ? 320 : 540;
-  const CH = portrait ? 440 : 300;
+  // 直式：卡片往下加長到包住三列清單（原本清單會超出卡片下緣），內容整組上移 cy 讓卡片垂直置中
+  const CH = portrait ? 492 : 300;
+  const cy = portrait ? 26 : 0;
   const cw = portrait ? 252 : 292; // 圖表寬
   const ch = portrait ? 96 : 112;
   const cx0 = portrait ? -cw / 2 : -CW / 2 + 28;
   const base = portrait ? -52 : 68; // 圖表底線
   const dcx = portrait ? 0 : CW / 2 - 92;
   const dcy = portrait ? 118 : -14;
-  return { portrait, CW, CH, cw, ch, cx0, base, dcx, dcy, step: cw / (N - 1) };
+  return { portrait, CW, CH, cy, cw, ch, cx0, base, dcx, dcy, step: cw / (N - 1) };
 }
+/** 卡片放不進畫面（方形下直式卡片太高、4:3 下橫式卡片太寬）時整張以中心縮小（1.3.0）；放得下就是 1 */
+const cardFit = (env: { Wu: number; Hu: number }) => {
+  const L = layout(env.Wu);
+  const k = L.portrait ? 1 : 1.12; // 橫式卡片畫的時候另外放大 1.12 倍
+  return Math.min(1, (env.Hu - 24) / (L.CH * k), (env.Wu - 24) / (L.CW * k));
+};
 
 export const chart2: Subject = {
   id: 'chart',
@@ -47,9 +55,10 @@ export const chart2: Subject = {
   hero: 0.75,
   events: (env) => {
     const L = layout(env.Wu);
+    const f = cardFit(env);
     return [
-      { u: 0.34, x: L.cx0 + PEAK * L.step, y: L.base, k: 0.5 },
-      { u: 0.62, x: L.dcx, y: L.dcy, k: 0.6 },
+      { u: 0.34, x: (L.cx0 + PEAK * L.step) * f, y: (L.base - L.cy) * f, k: 0.5 },
+      { u: 0.62, x: L.dcx * f, y: (L.dcy - L.cy) * f, k: 0.6 },
     ];
   },
   cues(M) {
@@ -62,10 +71,18 @@ export const chart2: Subject = {
     const L = layout(env.Wu);
     const g = M.tw(0.1, 0.34, 'o');
     const out = M.tw(0.86, 0.96, 'i');
-    return [L.cx0 + PEAK * L.step, L.base - DATA[PEAK] * L.ch * g * (1 - out)];
+    const f = cardFit(env);
+    return [(L.cx0 + PEAK * L.step) * f, (L.base - DATA[PEAK] * L.ch * g * (1 - out) - L.cy) * f];
   },
   draw(S, M, env) {
     const L = layout(env.Wu);
+    const fitC = cardFit(env);
+    const moved = fitC < 1 || L.cy !== 0;
+    if (moved) {
+      S.push();
+      S.scale(fitC);
+      S.translate(0, -L.cy);
+    }
     const pal = S.pal;
     const baseA = S.alpha;
     const det = S.look.detail;
@@ -103,10 +120,10 @@ export const chart2: Subject = {
     S.jitter(1, 0.5);
     S.scale(L.portrait ? 1 : 1.12);
     // 卡片：髮絲邊框＋極淡下緣陰影
-    S.rect(0, 2, L.CW - 2, L.CH, 16, 'ink', { alpha: 0.05, ...FL });
-    S.rect(0, 0, L.CW, L.CH, 16, 'card', { shadow: false, hl: false, stroke: hair, outline: true, lw: 0.4, drawOn: false });
+    S.rect(0, 2 + L.cy, L.CW - 2, L.CH, 16, 'ink', { alpha: 0.05, ...FL });
+    S.rect(0, L.cy, L.CW, L.CH, 16, 'card', { shadow: false, hl: false, stroke: hair, outline: true, lw: 0.4, drawOn: false });
     const left = -L.CW / 2 + 28;
-    const top = -L.CH / 2 + 26;
+    const top = L.cy - L.CH / 2 + 26;
 
     // ── 標題、大數字與成長膠囊、區間分頁
     const cnt = M.tw(0.1, 0.46, 'o');
@@ -224,5 +241,6 @@ export const chart2: Subject = {
     });
     S.pop();
     S.alpha = baseA;
+    if (moved) S.pop();
   },
 };

@@ -1,6 +1,6 @@
 // DSP 基礎：噪音、濾波器、包絡、殘響、混音與響度。全部對 Float32Array 逐樣本運算，無 DOM 依賴。
 import { clamp } from '../engine/util';
-import { stepToSec } from './compose';
+import { stepToSec } from './songTime';
 import type { NoteEv, Song } from './types';
 
 export interface Stereo {
@@ -259,3 +259,80 @@ export function noteSpan(song: Pick<Song, 'bpm' | 'swing'>, n: NoteEv): [number,
 
 /** 讓出事件迴圈，避免長時間渲染凍結介面 */
 export const yieldNow = () => new Promise<void>((r) => setTimeout(r, 0));
+
+// ---------- 逐軌混音（1.4.0 精修）----------
+/** 二階濾波器（RBJ cookbook），整段處理 */
+export type BiquadKind = 'lowpass' | 'highpass' | 'peaking' | 'lowshelf' | 'highshelf';
+export function biquad(buf: Float32Array, sr: number, kind: BiquadKind, f: number, q = 0.707, gainDb = 0) {
+  const w = (2 * Math.PI * Math.min(f, sr * 0.45)) / sr;
+  const cw = Math.cos(w);
+  const sw = Math.sin(w);
+  const A = Math.pow(10, gainDb / 40);
+  const al = sw / (2 * q);
+  let b0: number, b1: number, b2: number, a0: number, a1: number, a2: number;
+  switch (kind) {
+    case 'lowpass':
+      b0 = (1 - cw) / 2; b1 = 1 - cw; b2 = (1 - cw) / 2; a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al;
+      break;
+    case 'highpass':
+      b0 = (1 + cw) / 2; b1 = -(1 + cw); b2 = (1 + cw) / 2; a0 = 1 + al; a1 = -2 * cw; a2 = 1 - al;
+      break;
+    case 'peaking':
+      b0 = 1 + al * A; b1 = -2 * cw; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * cw; a2 = 1 - al / A;
+      break;
+    case 'lowshelf': {
+      const s2 = 2 * Math.sqrt(A) * al;
+      b0 = A * (A + 1 - (A - 1) * cw + s2); b1 = 2 * A * (A - 1 - (A + 1) * cw); b2 = A * (A + 1 - (A - 1) * cw - s2);
+      a0 = A + 1 + (A - 1) * cw + s2; a1 = -2 * (A - 1 + (A + 1) * cw); a2 = A + 1 + (A - 1) * cw - s2;
+      break;
+    }
+    default: {
+      const s2 = 2 * Math.sqrt(A) * al;
+      b0 = A * (A + 1 + (A - 1) * cw + s2); b1 = -2 * A * (A - 1 + (A + 1) * cw); b2 = A * (A + 1 + (A - 1) * cw - s2);
+      a0 = A + 1 - (A - 1) * cw + s2; a1 = 2 * (A - 1 - (A + 1) * cw); a2 = A + 1 - (A - 1) * cw - s2;
+    }
+  }
+  b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0;
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const x = buf[i];
+    const y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1; x1 = x; y2 = y1; y1 = y;
+    buf[i] = y;
+  }
+}
+
+/**
+ * 「有聲部分」的響度（dB，相對滿刻度）：先濾掉 80 Hz 以下（低頻不太影響聽感音量），每 50 毫秒一塊算均方，
+ * 只算比整體平均低不到 10 dB 的塊（BS.1770 的相對門檻概念）——安靜的段落與休止不會把整軌的響度拉低。沒有聲音回傳 -120。
+ */
+export function activeLoudness(buf: Float32Array, sr: number): number {
+  const tmp = buf.slice();
+  biquad(tmp, sr, 'highpass', 80, 0.7);
+  const B = Math.max(1, Math.round(sr * 0.05));
+  const ms: number[] = [];
+  for (let i = 0; i + B <= tmp.length; i += B) {
+    let s = 0;
+    for (let j = i; j < i + B; j++) s += tmp[j] * tmp[j];
+    ms.push(s / B);
+  }
+  const abs = ms.filter((m) => m > 1e-7); // −70 dB 的絕對門檻
+  if (!abs.length) return -120;
+  const mean = abs.reduce((a, b) => a + b, 0) / abs.length;
+  const gated = abs.filter((m) => m > mean * 0.1);
+  const g = gated.length ? gated.reduce((a, b) => a + b, 0) / gated.length : mean;
+  return 10 * Math.log10(g);
+}
+
+/** 簡單的壓縮器（前饋、峰值包絡）：超過 thr（dB）的部分以 ratio 壓下；attack／release 秒 */
+export function compress(buf: Float32Array, sr: number, thrDb: number, ratio: number, attack = 0.008, release = 0.12) {
+  const ka = Math.exp(-1 / (attack * sr));
+  const kr = Math.exp(-1 / (release * sr));
+  let env = 0;
+  for (let i = 0; i < buf.length; i++) {
+    const x = Math.abs(buf[i]);
+    env = x > env ? ka * env + (1 - ka) * x : kr * env + (1 - kr) * x;
+    const db = 20 * Math.log10(env + 1e-9);
+    if (db > thrDb) buf[i] *= Math.pow(10, ((thrDb - db) * (1 - 1 / ratio)) / 20);
+  }
+}

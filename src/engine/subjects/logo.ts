@@ -18,6 +18,12 @@ const WORD = 'LUMEN';
 const SIZE = 44;
 const TRACK = 12;
 const kOf = (Wu: number) => Math.min(1.45, (Wu * 0.8) / 450);
+// 直式（1.3.0）：光圈在上、分隔線橫放、字標在下置中；寬度只要容得下字標（約 240 單位），整組可以放大到畫面寬的八成
+const isTall = (env: { Wu: number; Hu: number }) => env.Wu < env.Hu * 0.95;
+const kTall = (Wu: number) => Math.min(1.45, (Wu * 0.8) / 240);
+const T_MARK_Y = -57; // 直式：光圈最後停的位置（整組垂直置中）
+const T_DIV_Y = 29; // 直式：橫的分隔線
+const T_WORD_Y = 83; // 直式：字標的基準
 const D2R = Math.PI / 180;
 
 /** 一片葉片（未旋轉）：外緣圓弧 0°→72°，內緣落在半徑 rh 的六邊形孔上；rh=0 時六片在中心相會＝光圈關閉 */
@@ -61,13 +67,16 @@ export const logo: Subject = {
       { u: 0.86, kind: 'flip', k: 0.4 },
     ] as Cue[],
   track(M, env) {
-    return [lerp(0, -150, M.tw(0.44, 0.56, 'io') * (1 - M.tw(0.86, 0.94, 'io'))) * kOf(env.Wu), 0];
+    const sl = M.tw(0.44, 0.56, 'io') * (1 - M.tw(0.86, 0.94, 'io'));
+    if (isTall(env)) return [0, lerp(0, T_MARK_Y, sl) * kTall(env.Wu)];
+    return [lerp(0, -150, sl) * kOf(env.Wu), 0];
   },
   draw(S, M, env) {
     const pal = S.pal;
     const det = S.look.detail;
     const baseA = S.alpha;
-    const K = kOf(env.Wu);
+    const tall = isTall(env);
+    const K = tall ? kTall(env.Wu) : kOf(env.Wu);
     const FL = { stroke: false, shadow: false, hl: false, flat: true, drawOn: false } as const;
     const mute = mix(pal.bg, pal.ink, 0.55);
     const cell = (S.look.post.find((q) => q.fx === 'pixelate')?.p.size ?? 0) * 400;
@@ -117,12 +126,13 @@ export const logo: Subject = {
 
     S.push();
     S.scale(K);
-    const mx = lerp(0, markX, slide);
+    const mx = tall ? 0 : lerp(0, markX, slide);
+    const my = tall ? lerp(0, T_MARK_Y, slide) : 0;
     const presence = frame * (1 - unframe);
 
     // ════ 鏡頭
     S.push();
-    S.translate(mx, 0);
+    S.translate(mx, my);
     S.alpha = baseA;
     // 鏡筒：外框圓環沿圓周畫出，底盤淡入
     if (presence > 0.002) {
@@ -176,7 +186,8 @@ export const logo: Subject = {
     const dv = M.tw(0.48, 0.58, 'io') * (1 - M.tw(0.8, 0.86, 'io'));
     if (dv > 0.002) {
       S.alpha = baseA;
-      S.line([divX, -34 * dv, divX, 34 * dv], mute, { w: 0.9, cap: 'butt', alpha: 0.7, drawOn: false });
+      if (tall) S.line([-34 * dv, T_DIV_Y, 34 * dv, T_DIV_Y], mute, { w: 0.9, cap: 'butt', alpha: 0.7, drawOn: false });
+      else S.line([divX, -34 * dv, divX, 34 * dv], mute, { w: 0.9, cap: 'butt', alpha: 0.7, drawOn: false });
     }
 
     // ════ 文字標：遮罩後逐字升起；副標從遮罩下滑出
@@ -184,6 +195,9 @@ export const logo: Subject = {
     const base = SIZE * 0.42;
     if (M.u > 0.5 && M.u < 0.94) {
       S.alpha = baseA;
+      // 直式：整個字標（含遮罩）移到光圈下方、水平置中
+      S.push();
+      if (tall) S.translate(-(wordX + wordW / 2), T_WORD_Y);
       const pix = cell > 1.2 && SIZE * K < cell * 10;
       clip([[divX + 4, top, divX + 4 + GAP + wordW + 40, top, divX + 4 + GAP + wordW + 40, base, divX + 4, base]], () => {
         let x = wordX;
@@ -203,6 +217,7 @@ export const logo: Subject = {
         if (cell > 1.2) S.rect(wordX + wordW / 2, y, wordW, 4, 2, mute, { ...FL, alpha: 0.6 });
         else S.text('L I G H T   &   M O T I O N', wordX, y, 10.5, mute, { align: 'left', stroke: false, shadow: false, flat: true, glow: false });
       });
+      S.pop();
     }
     S.pop();
     S.alpha = baseA;

@@ -62,7 +62,8 @@ export class Stage3D implements ThreeLike {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // three r186 起 PCFSoftShadowMap 已移除（會自動退回 PCF 並在主控台警告）；PCFShadowMap 現在本身就是硬體雙線性 PCF
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.canvas.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       this.lost = true;

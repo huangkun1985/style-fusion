@@ -113,6 +113,8 @@ export function Stage({ fill = false }: { fill?: boolean }) {
       if (aspect === 'fit') {
         // 填滿：用掉整個舞台區；比例限制在合理範圍，導出才不會變成極端的長條
         ASPECT.fit = Math.min(2.6, Math.max(0.4, w / Math.max(1, h)));
+        // 通知用到比例的地方（音效提示點、聲音分頁）；變化很小時不通知，拖動視窗才不會一直重算
+        if (Math.abs(useStore.getState().fitAr - ASPECT.fit) > 0.02) useStore.setState({ fitAr: ASPECT.fit });
       } else {
         const ar = ASPECT[aspect];
         h = w / ar;
@@ -142,7 +144,7 @@ export function Stage({ fill = false }: { fill?: boolean }) {
       lastT = clock.t;
       s.dirty = false;
       const dpr = Math.min(2, window.devicePixelRatio || 1) * QUALITY[s.quality];
-      const base: Omit<FrameSpec, 'subject'> = { look: s.look, move: s.move, tune: s.tune, time: clock.t, onion: s.onion };
+      const base: Omit<FrameSpec, 'subject'> = { look: s.look, move: s.move, tune: s.tune, time: clock.t, onion: s.onion, live: true };
       if (!s.grid4) {
         const cv = canvasRef.current;
         if (!cv) return;

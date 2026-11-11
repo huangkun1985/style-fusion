@@ -493,6 +493,8 @@ export interface SoundSpec {
   key: string;
   /** 動畫循環內的音效提示點（秒） */
   cues: { t: number; kind: string }[];
+  /** 配樂模式（1.4.0）：整首長度與段落（秒）；循環的歌沒有 */
+  arrangement?: { seconds: number; sections: { name: string; en: string; from: number; to: number }[]; bed: boolean };
 }
 
 const ROLE_EN: Record<keyof Palette, string> = {
@@ -672,7 +674,10 @@ export function claudePrompts(b: Brief, subject: SubjectId, look: Look, move: Mo
   }
   if (sound) {
     L.push('', '## C. 聲音風格（階段二用；選配：用 Web Audio 即時合成，不使用外部音檔）');
-    L.push(`- 配樂：${sound.genre}，約 ${sound.bpm} BPM，${sound.key} 調，聲音質感參考「${sound.scheme}」。配樂可以自然循環，不必和動畫長度對齊；音量柔和，不蓋過內容。`);
+    if (sound.arrangement) {
+      const a = sound.arrangement;
+      L.push(`- 配樂：${sound.genre}，約 ${sound.bpm} BPM，${sound.key} 調，聲音質感參考「${sound.scheme}」。這是約 ${a.seconds.toFixed(0)} 秒、有段落的完整配樂：${a.sections.map((x) => `${x.name} ${x.from.toFixed(1)}–${x.to.toFixed(1)} 秒`).join('、')}；畫面的節奏請跟著段落走（前奏鋪陳、展開與高潮放主要內容、回落收尾）。${a.bed ? '音樂是墊底用的（沒有主旋律），可以放旁白或口播。' : ''}`);
+    } else L.push(`- 配樂：${sound.genre}，約 ${sound.bpm} BPM，${sound.key} 調，聲音質感參考「${sound.scheme}」。配樂可以自然循環，不必和動畫長度對齊；音量柔和，不蓋過內容。`);
     if (sound.pack) L.push(`- 動作音效：${sound.pack} 風格。依互動配對：${PROMPT_SFX_USE_ZH}。音效要少而準，不要每個元素都響。`);
     L.push('- 預設靜音，提供一個明顯的聲音開關，使用者點擊後才開啟（瀏覽器的自動播放限制）。');
   }
@@ -764,7 +769,10 @@ export function claudePrompts(b: Brief, subject: SubjectId, look: Look, move: Mo
   }
   if (sound) {
     E.push('', '## C. Sound style (used in Phase 2; optional; synthesize with Web Audio, no audio files)');
-    E.push(`- Music: ${sound.genre}, about ${sound.bpm} BPM, key of ${sound.key}, timbre like "${sound.scheme}". It may loop naturally and need not match the animation length; keep the volume gentle so it never covers the content.`);
+    if (sound.arrangement) {
+      const a = sound.arrangement;
+      E.push(`- Music: ${sound.genre}, about ${sound.bpm} BPM, key of ${sound.key}, timbre like "${sound.scheme}". It is a complete ~${a.seconds.toFixed(0)}-second score with sections: ${a.sections.map((x) => `${x.en} ${x.from.toFixed(1)}–${x.to.toFixed(1)}s`).join(', ')}. Pace the visuals to the sections (set up in the intro, main content in the build and peak, wrap up in the outro).${a.bed ? ' It is a bed track with no lead melody, so narration or voice-over can sit on top.' : ''}`);
+    } else E.push(`- Music: ${sound.genre}, about ${sound.bpm} BPM, key of ${sound.key}, timbre like "${sound.scheme}". It may loop naturally and need not match the animation length; keep the volume gentle so it never covers the content.`);
     if (sound.pack) E.push(`- Action sound effects: ${sound.pack} style. Pair with interactions: ${PROMPT_SFX_USE_EN}. Keep them few and meaningful, not on every element.`);
     E.push('- Muted by default; provide a clear sound toggle and enable only after a user click (browser autoplay policy).');
   }

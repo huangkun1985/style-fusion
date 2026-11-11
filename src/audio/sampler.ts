@@ -38,13 +38,15 @@ function browserDecoder(): SamplerDecoder | null {
   };
 }
 let decoder: SamplerDecoder | null = browserDecoder();
+/** 背景執行緒（Worker）沒有解碼器：樂器由主執行緒解碼好之後傳進來（installInstrument／installDrums） */
+let external = false;
 export function setSamplerDecoder(d: SamplerDecoder | null) {
   decoder = d;
   insts.clear();
   drums = null;
   drumsP = null;
 }
-export const samplerAvailable = () => decoder !== null;
+export const samplerAvailable = () => decoder !== null || external;
 
 /**
  * MP3 解碼器多少會在開頭多留一段編碼延遲（約 1100 點）。建置時我們把音頭留在第 4 毫秒，
@@ -110,6 +112,13 @@ export function loadInstrument(id: string): Promise<SampledInst | null> {
 }
 export const instrument = (id: string): SampledInst | null => ready.get(id) ?? null;
 
+/** 裝入一個已經解碼好的樂器（背景執行緒用：主執行緒解碼後傳過來） */
+export function installInstrument(inst: SampledInst) {
+  external = true;
+  ready.set(inst.id, inst);
+  insts.set(inst.id, Promise.resolve(inst));
+}
+
 let drums: Record<string, DrumSample> | null = null;
 let drumsP: Promise<Record<string, DrumSample> | null> | null = null;
 export function loadDrums(): Promise<Record<string, DrumSample> | null> {
@@ -137,6 +146,13 @@ export function loadDrums(): Promise<Record<string, DrumSample> | null> {
   return drumsP;
 }
 export const drumSamples = () => drums;
+
+/** 裝入已解碼的鼓組（背景執行緒用） */
+export function installDrums(d: Record<string, DrumSample>) {
+  external = true;
+  drums = d;
+  drumsP = Promise.resolve(d);
+}
 
 /** 找最接近的音區 */
 export function zoneFor(inst: SampledInst, midi: number): Zone {

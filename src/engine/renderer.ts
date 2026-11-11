@@ -2,6 +2,7 @@
 import { drawBackground } from './backgrounds';
 import { Brush } from './brush';
 import { drawDecos } from './decos';
+import { setLiveRender } from './liveSong';
 import { loopSeconds } from './loop';
 import type { Env, ThreeLike } from './env';
 import { FX } from './fx';
@@ -23,6 +24,8 @@ export interface FrameSpec {
   onion?: boolean;
   transparent?: boolean;
   thumb?: boolean;
+  /** 即時舞台（音樂視覺化要補償喇叭延遲；導出與縮圖不補償） */
+  live?: boolean;
   /** 關閉 WebGL 後期（比較用） */
   noPost?: boolean;
 }
@@ -193,6 +196,7 @@ export class Renderer {
     W = Math.max(2, Math.round(W));
     H = Math.max(2, Math.round(H));
     const sub = SUBJECTS[f.subject] ?? SUBJECTS.mascot;
+    setLiveRender(!!f.live);
     size(this.scene, W, H);
     size(this.layer, W, H);
     size(this.tmp, W, H);

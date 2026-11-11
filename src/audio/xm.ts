@@ -2,7 +2,7 @@
 // （16 位元、多音區、持續音循環），沒有取樣的音色（合成器、人聲…）退回程式生成的小取樣。
 // 用自製的 XM 播放器渲染成音訊，也可以輸出標準 .xm 檔，用 OpenMPT、MilkyTracker 等開啟。
 import { clamp } from '../engine/util';
-import { stepToSec } from './compose';
+import { stepToSec } from './songTime';
 import type { RenderOpts } from './chip';
 import { foldTail, freeverb, master, newStereo, removeMean, yieldNow, type Stereo } from './dsp';
 import type { Song, Track, TrackRole } from './types';
@@ -577,7 +577,7 @@ export async function renderXm(song: Song, opts: RenderOpts): Promise<Stereo> {
   const out = foldTail(ext, n);
   removeMean(out.l);
   removeMean(out.r);
-  master(out, 0.12);
+  if (!opts.raw) master(out, 0.12);
   return out;
 }
 

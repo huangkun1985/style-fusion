@@ -8,11 +8,13 @@ import { darken, lighten, luma, mix } from '../../color';
 import { bump, clamp, fract, TAU } from '../../util';
 import { HOPS, mascotPose } from '../mascot';
 import type { Subject } from '../types';
+import { narrowFit } from './fit';
 
 const G = 168;
 const K = 1.28; // 只放大角色本身
 const YS = 0.82; // 跳躍高度的倍率（角色變大後，頂點仍要留在畫面內）
 const C0 = G - 140; // 襯景的視覺中心
+const NEED = 172; // 左右跳躍 ±70 加上頭、尾巴的寬度：畫面半寬至少要這麼多才放得下
 const HY = -80; // 頭中心（腳底為 0，向上為負）
 const NECK = -38; // 頭的轉動支點
 const EYE = HY - 2;
@@ -81,11 +83,20 @@ export const mascot2: Subject = {
       { u: h.h0 + (h.h1 - h.h0) * 0.72, kind: 'land', k: 0.9 },
     ]);
   },
-  track(M) {
+  track(M, env) {
     const s = mascotPose(M, M.u);
-    return [M.snap(s.x), G - M.snap(s.y) * YS - 62 * s.sy * K];
+    const f = narrowFit(env, NEED);
+    return [M.snap(s.x) * f, C0 + (G - M.snap(s.y) * YS - 62 * s.sy * K - C0) * f];
   },
-  draw(S, M) {
+  draw(S, M, env) {
+    // 直式／窄畫面（1.3.0）：左右跳躍加上角色寬度放不進去時，整組（含襯景）以襯景中心縮小；橫式不變
+    const fit = narrowFit(env, NEED);
+    if (fit < 1) {
+      S.push();
+      S.translate(0, C0);
+      S.scale(fit);
+      S.translate(0, -C0);
+    }
     const mv = M.mv;
     const u = M.u;
     const s = mascotPose(M, u);
@@ -330,5 +341,6 @@ export const mascot2: Subject = {
       S.pop();
     }
     S.pop();
+    if (fit < 1) S.pop();
   },
 };

@@ -23,6 +23,15 @@ export function setAudioLatency(s: number) {
 export function audioLatency(): number {
   return latency;
 }
+let liveRender = false;
+/** 渲染器每畫一格都會設定：這一格是不是即時舞台（導出、縮圖、接觸表不是） */
+export function setLiveRender(v: boolean) {
+  liveRender = v;
+}
+/** 畫面該延後多少秒才對得上喇叭：只有即時舞台要補償；導出時音軌是從 0 開始對齊的，補償反而會錯開 */
+export function liveLatency(): number {
+  return liveRender ? latency : 0;
+}
 /** 每次換歌加一（給快取判斷用） */
 export function liveSongRev(): number {
   return rev;

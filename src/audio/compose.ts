@@ -5,7 +5,8 @@ import { PIECE_BY_ID, parsePiece } from './classics';
 import { getImportedMidi, songFromMidi } from './midiImport';
 import { DRUMS, DRUM_NOTE, GENRES, KIT_BY_DRUMS, type DrumName, type GenreSpec, type HookFamily, type RhythmKind } from './genres';
 import { MODE_NAME, SCALES, chordDegrees, chordLabel, chordPitches, nearestDegree, scaleNote, voice, type Mode } from './theory';
-import { NOTE_NAMES, type ChordInfo, type GenreId, type NoteEv, type Song, type Track, type TrackRole } from './types';
+import { applyArrangement, finalChord, humanize, planSections } from './arrange';
+import { NOTE_NAMES, type ArrShape, type ChordInfo, type GenreId, type NoteEv, type Section, type Song, type Track, type TrackRole } from './types';
 
 // ---------- 與動畫對齊 ----------
 export interface LoopPlan {
@@ -738,12 +739,18 @@ export interface ComposeOpts {
   /** 匯入的 MIDI：從第幾小節開始、取幾小節（0＝自動） */
   midiStart?: number;
   midiBars?: number;
+  /** 配樂模式（1.4.0）：約 len 秒、依 shape 的段落編排；不設定＝與動畫對齊的循環 */
+  arrange?: { len: number; shape: ArrShape };
+  /** 墊底（不搶口播）：拿掉主旋律與副旋律、琶音收小、鼓只留大鼓與踩鈸 */
+  bed?: boolean;
+  /** 精修（1.4.0）：力度微調；並讓渲染器做力度相關的起音、逐軌響度對齊與效果鏈 */
+  polish?: boolean;
 }
 
 export function composeSong(o: ComposeOpts): Song {
   if (o.piece === 'import') {
     const imp = getImportedMidi();
-    if (imp) return songFromMidi(imp, { animSeconds: o.animSeconds, sync: o.sync, tempo: o.tempo, key: o.key, start: o.midiStart ?? 0, bars: o.midiBars ?? 0, preferLock: o.preferLock });
+    if (imp) return { ...songFromMidi(imp, { animSeconds: o.animSeconds, sync: o.sync, tempo: o.tempo, key: o.key, start: o.midiStart ?? 0, bars: o.midiBars ?? 0, preferLock: o.preferLock }), polish: !!o.polish };
   }
   if (o.piece && PIECE_BY_ID[o.piece]) return composeFromPiece(o);
   const base = GENRES[o.genre];
@@ -757,7 +764,23 @@ export function composeSong(o: ComposeOpts): Song {
   const mode = spec.modes[Math.floor(rnd() * spec.modes.length)];
   const prog = spec.progs[Math.floor(rnd() * spec.progs.length)];
   const perBar = spec.chordsPerBar ?? 1;
-  const bars = plan.bars;
+  let bars = plan.bars;
+  let animLoops = plan.animLoops;
+  // 配樂模式：長度約 arrange.len 秒、至少 4 小節。和動畫對齊時，整首仍要是動畫循環的整數倍：
+  // 一個音樂循環是 plan.bars 小節 = k 次動畫循環，所以最小的單位是 plan.bars / gcd(plan.bars, k) 小節
+  if (o.arrange) {
+    const barSec = (60 / plan.bpm) * meter;
+    if (plan.synced) {
+      const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+      const g = gcd(plan.bars, plan.animLoops);
+      const unitBars = plan.bars / g;
+      const unitLoops = plan.animLoops / g;
+      let m = Math.max(1, Math.round(o.arrange.len / (unitBars * barSec)));
+      while (unitBars * m < 4) m++;
+      bars = unitBars * m;
+      animLoops = unitLoops * m;
+    } else bars = Math.max(4, Math.round(o.arrange.len / barSec / 2) * 2);
+  }
   const seed = seedOf(o.seed, strSeed(o.genre) & 0xffff, 1);
 
   // 和弦
@@ -775,10 +798,24 @@ export function composeSong(o: ComposeOpts): Song {
       const start = ci * (spb / perBar);
       const info = chordLabel(pitches);
       row.push({ degree, start, len: spb / perBar, pitches, rootPc: info.root });
-      chordInfos.push({ bar: b, step: start, root: info.root, quality: info.quality, notes: pitches, label: info.label });
     }
     chords.push(row);
   }
+  // 配樂收尾：倒數第二小節屬和弦、最後一小節主和弦（終止式）
+  if (o.arrange) {
+    const one = (degree: number): BarChord[] => {
+      const pitches = chordPitches(key, mode, degree, spec.chordKind, 48);
+      return [{ degree, start: 0, len: spb, pitches, rootPc: chordLabel(pitches).root }];
+    };
+    chords[bars - 1] = one(0);
+    if (bars >= 4) chords[bars - 2] = one(4);
+  }
+  chords.forEach((row, b) =>
+    row.forEach((ch) => {
+      const info = chordLabel(ch.pitches);
+      chordInfos.push({ bar: b, step: ch.start, root: info.root, quality: info.quality, notes: ch.pitches, label: info.label });
+    }),
+  );
   const ctx: Ctx = {
     spec,
     seed,
@@ -812,10 +849,25 @@ export function composeSong(o: ComposeOpts): Song {
   const dt = tracks.find((t) => t.drum);
   if (dt) dt.kit = spec.kit ?? KIT_BY_DRUMS[spec.drums] ?? 'hybrid';
 
+  // 段落編排（配樂模式）或墊底；精修再加力度微調
+  let final: Track[] = tracks;
+  let sections: Section[] | undefined;
+  if (o.arrange) {
+    sections = planSections(bars, o.arrange.shape);
+    const ac = { spb, bars, sections, bed: !!o.bed, cadence: true };
+    final = applyArrangement(tracks, ac);
+    const tonic = chords[bars - 1][0];
+    finalChord(final, ac, voice(tonic.pitches, 50, 74, 62), bassRoot(tonic.rootPc));
+  } else if (o.bed) {
+    final = applyArrangement(tracks, { spb, bars, sections: [{ kind: 'body', name: '主體', bar: 0, bars }], bed: true, cadence: false });
+  }
+  if (o.polish) final = humanize(final, seed);
+  final = final.filter((t) => t.notes.length);
+
   const stepSec = 60 / plan.bpm / 4;
   const steps = bars * spb;
   return {
-    title: `${spec.name} · ${NOTE_NAMES[key]} ${MODE_NAME[mode]} · ${Math.round(plan.bpm)} BPM`,
+    title: `${spec.name}${o.arrange ? '配樂' : ''} · ${NOTE_NAMES[key]} ${MODE_NAME[mode]} · ${Math.round(plan.bpm)} BPM`,
     genre: o.genre,
     bpm: plan.bpm,
     meter,
@@ -825,12 +877,15 @@ export function composeSong(o: ComposeOpts): Song {
     swing: spec.swing,
     key,
     mode,
-    tracks,
+    tracks: final,
     chords: chordInfos,
     seconds: steps * stepSec,
     animSeconds: o.animSeconds,
-    animLoops: plan.animLoops,
+    animLoops,
     beatLocked: plan.beatLocked,
+    sections,
+    polish: !!o.polish,
+    bed: !!o.bed,
   };
 }
 
@@ -939,6 +994,7 @@ function composeFromPiece(o: ComposeOpts): Song {
   push('drums', 'perc', genDrums(ctx), 1, 0, true);
   const dt = tracks.find((t) => t.drum);
   if (dt) dt.kit = spec.kit ?? KIT_BY_DRUMS[spec.drums] ?? 'hybrid';
+  const final = o.polish ? humanize(tracks, ctx.seed) : tracks;
 
   const stepSec = 60 / plan.bpm / 4;
   return {
@@ -952,22 +1008,16 @@ function composeFromPiece(o: ComposeOpts): Song {
     swing: spec.swing,
     key,
     mode,
-    tracks,
+    tracks: final,
     chords: chordInfos,
     seconds: steps * stepSec,
     animSeconds: o.animSeconds,
     animLoops: plan.animLoops,
     beatLocked: plan.beatLocked,
+    polish: !!o.polish,
   };
 }
 
-/** 步數 → 秒（含搖擺：每拍的後半拍延後） */
-export function stepToSec(song: Pick<Song, 'bpm' | 'swing'>, t: number): number {
-  const beat = Math.floor(t / 4);
-  const x = t - beat * 4;
-  const d = song.swing * 2;
-  const w = x < 2 ? (x * (2 + d)) / 2 : 2 + d + ((x - 2) * (2 - d)) / 2;
-  return (beat * 4 + w) * (60 / song.bpm / 4);
-}
+export { stepToSec } from './songTime';
 
 export { SCALES };

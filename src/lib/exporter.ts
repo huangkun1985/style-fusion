@@ -20,9 +20,11 @@ export interface ExportJob {
   h: number;
   fps: number;
   loops: number;
+  /** 指定總長（秒）：例如「跟整首歌一樣長」。有設定就不看 loops */
+  seconds?: number;
   time?: number;
   transparent?: boolean;
-  /** 要封裝進 MP4 的音訊（從時間 0 起，取樣率 SAMPLE_RATE，長度需涵蓋整段影片） */
+  /** 要封裝進 MP4／WebM 的音訊（從時間 0 起，取樣率 SAMPLE_RATE，長度需涵蓋整段影片） */
   audio?: Stereo | null;
 }
 
@@ -35,10 +37,15 @@ export interface ExportResult {
 
 export const canMp4 = typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window;
 
+/** 導出的總秒數：指定了 seconds 就用它，否則是動畫循環 × 次數 */
+function totalSeconds(job: Pick<ExportJob, 'subject' | 'move' | 'tune' | 'loops' | 'seconds'>) {
+  const L = loopSeconds(SUBJECTS[job.subject], job.move, job.tune);
+  return { L, total: job.seconds && job.seconds > 0 ? job.seconds : L * job.loops };
+}
+
 function frameCount(job: ExportJob) {
-  const sub = SUBJECTS[job.subject];
-  const L = loopSeconds(sub, job.move, job.tune);
-  return { L, n: Math.max(1, Math.round(L * job.loops * job.fps)) };
+  const { L, total } = totalSeconds(job);
+  return { L, total, n: Math.max(1, Math.round(total * job.fps)) };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -126,13 +133,13 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
       const blob = await new Promise<Blob>((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error('PNG 編碼失敗'))), 'image/png'));
       return { blob, name: `${base}.png` };
     }
-    const { L, n } = frameCount(job);
+    const { total, n } = frameCount(job);
     if (job.format === 'gif') {
       const gif = GIFEncoder();
       const delay = 1000 / job.fps;
       for (let i = 0; i < n; i++) {
         if (signal?.aborted) throw new Error('已取消');
-        draw((i / job.fps) % (L * job.loops));
+        draw((i / job.fps) % total);
         const data = ctx.getImageData(0, 0, job.w, job.h).data;
         const palette = quantize(data, 256);
         const index = applyPalette(data, palette);
@@ -192,17 +199,23 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
     if (job.format === 'webm') {
       const stream = cv.captureStream(0);
       const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
-      const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm';
-      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6 });
+      // 音軌：把混好的音訊即時播進一條媒體串流（不會從喇叭出聲），和畫面一起錄
+      const sound = job.audio ? await webmAudio(job.audio) : null;
+      if (sound) stream.addTrack(sound.track);
+      const types = sound ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'] : ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+      const mime = types.find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm';
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6, audioBitsPerSecond: 160_000 });
       const chunks: Blob[] = [];
       rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
       const done = new Promise<void>((res) => (rec.onstop = () => res()));
       rec.start();
+      sound?.start();
       // 以真實時間節奏推送幀（MediaRecorder 需要即時）
       const t0 = performance.now();
       for (let i = 0; i < n; i++) {
         if (signal?.aborted) {
           rec.stop();
+          sound?.close();
           throw new Error('已取消');
         }
         draw(i / job.fps);
@@ -213,7 +226,9 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
       }
       rec.stop();
       await done;
-      return { blob: new Blob(chunks, { type: 'video/webm' }), name: `${base}.webm` };
+      sound?.close();
+      const note = job.audio && !sound ? '這個瀏覽器沒有讓網頁錄製音訊，影片沒有聲音。可改用 MP4，或到「聲音」分頁導出 WAV 再合成。' : undefined;
+      return { blob: new Blob(chunks, { type: 'video/webm' }), name: `${base}.webm`, note };
     }
     if (job.format === 'zip') {
       const files: Record<string, Uint8Array> = {};
@@ -249,7 +264,46 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
   }
 }
 
-export function estimateFrames(job: Pick<ExportJob, 'subject' | 'move' | 'tune' | 'fps' | 'loops'>) {
-  const sub = SUBJECTS[job.subject];
-  return Math.max(1, Math.round(loopSeconds(sub, job.move, job.tune) * job.loops * job.fps));
+export function estimateFrames(job: Pick<ExportJob, 'subject' | 'move' | 'tune' | 'fps' | 'loops' | 'seconds'>) {
+  return Math.max(1, Math.round(totalSeconds(job).total * job.fps));
+}
+
+/** WebM 的音軌：一個暫時的 AudioContext 把音訊播進 MediaStream。瀏覽器不讓出聲（例如沒有音訊裝置）就回傳 null，影片照樣導出 */
+async function webmAudio(pcm: Stereo): Promise<{ track: MediaStreamTrack; start: () => void; close: () => void } | null> {
+  try {
+    const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    if (ctx.state !== 'running') {
+      const ok = await Promise.race([ctx.resume().then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 1500))]);
+      if (!ok || (ctx.state as AudioContextState) !== 'running') {
+        void ctx.close();
+        return null;
+      }
+    }
+    const buf = ctx.createBuffer(2, pcm.l.length, SAMPLE_RATE);
+    buf.copyToChannel(pcm.l as Float32Array<ArrayBuffer>, 0);
+    buf.copyToChannel(pcm.r as Float32Array<ArrayBuffer>, 1);
+    const dest = ctx.createMediaStreamDestination();
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(dest);
+    const track = dest.stream.getAudioTracks()[0];
+    if (!track) {
+      void ctx.close();
+      return null;
+    }
+    return {
+      track,
+      start: () => src.start(),
+      close: () => {
+        try {
+          src.stop();
+        } catch {
+          /* 已停止 */
+        }
+        void ctx.close();
+      },
+    };
+  } catch {
+    return null;
+  }
 }

@@ -40,6 +40,8 @@ export interface PlanInput {
   baseMove: Move;
 }
 
+const own = (o: object, k: unknown) => typeof k === 'string' && Object.hasOwn(o, k);
+
 /** 把可能來自舊版或損壞的本機儲存的偏好設定，整理成一定合法的值 */
 export function sanitizeAudioPrefs(raw: Partial<AudioPrefs> | null | undefined): AudioPrefs {
   const p = { ...AUDIO_DEFAULT, ...(raw ?? {}) };
@@ -48,18 +50,24 @@ export function sanitizeAudioPrefs(raw: Partial<AudioPrefs> | null | undefined):
     on: !!p.on,
     bgm: !!p.bgm,
     sfx: !!p.sfx,
-    scheme: p.scheme === 'auto' || p.scheme in SCHEME_INFO ? p.scheme : 'auto',
-    genre: p.genre === 'auto' || p.genre in GENRES ? p.genre : 'auto',
-    pack: p.pack === 'auto' || p.pack === 'off' || p.pack in PACK_INFO ? p.pack : 'auto',
+    // Object.hasOwn：`constructor`、`toString` 這類名稱不能被當成合法的曲風或方案
+    scheme: p.scheme === 'auto' || own(SCHEME_INFO, p.scheme) ? p.scheme : 'auto',
+    genre: p.genre === 'auto' || own(GENRES, p.genre) ? p.genre : 'auto',
+    pack: p.pack === 'auto' || p.pack === 'off' || own(PACK_INFO, p.pack) ? p.pack : 'auto',
     bgmVol: num(p.bgmVol, 0, 1, AUDIO_DEFAULT.bgmVol),
     sfxVol: num(p.sfxVol, 0, 1, AUDIO_DEFAULT.sfxVol),
     sync: !!p.sync,
     seed: Math.round(num(p.seed, 0, 99999, AUDIO_DEFAULT.seed)),
     tempo: num(p.tempo, 0.5, 2, 1),
     key: Math.round(num(p.key, -1, 11, -1)),
-    piece: typeof p.piece === 'string' && (p.piece in PIECE_BY_ID || (p.piece === 'import' && hasImportedMidi())) ? p.piece : 'off',
+    piece: typeof p.piece === 'string' && (own(PIECE_BY_ID, p.piece) || (p.piece === 'import' && hasImportedMidi())) ? p.piece : 'off',
     midiStart: Math.round(num(p.midiStart, 0, 9999, 0)),
     midiBars: Math.round(num(p.midiBars, 0, 256, 0)),
+    arrange: !!p.arrange,
+    arrLen: Math.round(num(p.arrLen, 8, 180, AUDIO_DEFAULT.arrLen)),
+    arrShape: (['arc', 'build', 'rise', 'steady'] as const).includes(p.arrShape) ? p.arrShape : AUDIO_DEFAULT.arrShape,
+    bed: !!p.bed,
+    polish: p.polish !== false,
   };
 }
 
@@ -83,7 +91,11 @@ export function planAudio(i: PlanInput): AudioPlan {
   const pack = prefs.pack === 'off' ? null : prefs.pack === 'auto' ? prof.pack : prefs.pack;
   const L = loopSeconds(SUBJECTS[subject], baseMove, tune);
   const preferLock = baseMove.beat > 0.05 || baseMove.zoomPunch > 0.05;
-  const songKey = [genre, prefs.seed, prefs.sync, r3(prefs.tempo), prefs.key, r3(L), r3(prof.tempoMul), r3(prof.energyMul), preferLock, imp ? `import${imp.rev}:${prefs.midiStart}:${prefs.midiBars}` : (piece?.id ?? '')].join('|');
+  // 配樂模式與墊底只用在自動作曲（名曲與匯入的 MIDI 照原曲）；精修對所有歌都有效
+  const generated = !imp && !piece;
+  const arrange = generated && prefs.arrange ? { len: prefs.arrLen, shape: prefs.arrShape } : undefined;
+  const bed = generated && prefs.bed;
+  const songKey = [genre, prefs.seed, prefs.sync, r3(prefs.tempo), prefs.key, r3(L), r3(prof.tempoMul), r3(prof.energyMul), preferLock, imp ? `import${imp.rev}:${prefs.midiStart}:${prefs.midiBars}` : (piece?.id ?? ''), arrange ? `arr${arrange.len}${arrange.shape}` : '', bed ? 'bed' : '', prefs.polish ? 'p' : ''].join('|');
   const musicKey = `${songKey}|${scheme}`;
   const key = `${musicKey}|${pack}`;
   const hit = memo.get(key);
@@ -102,6 +114,9 @@ export function planAudio(i: PlanInput): AudioPlan {
     piece: imp ? 'import' : piece?.id,
     midiStart: prefs.midiStart,
     midiBars: prefs.midiBars,
+    arrange,
+    bed,
+    polish: prefs.polish,
   });
   const plan: AudioPlan = { profile: prof, genre, genreLabel: imp ? '匯入的 MIDI' : (GENRES[genre]?.name ?? ''), scheme, pack, song, key, songKey, musicKey, animSeconds: L };
   if (memo.size > 60) memo.clear();

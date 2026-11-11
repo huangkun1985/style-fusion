@@ -1,5 +1,6 @@
 // 開發用：把所有曲風用指定的聲音方案各渲染一次，檢查數值是否正常（NaN、削波、音量、渲染時間）。
 // 用法：npx tsx scripts/audio-sweep.ts [方案=midi] [動畫秒數=3.2] [曲風...]
+//       環境變數 SF_POLISH=1 用「精修」渲染；SF_ARRANGE=秒數 改作配樂模式（四段）；SF_BED=1 墊底
 import { PIECES } from '../src/audio/classics';
 import { composeSong } from '../src/audio/compose';
 import { GENRE_LIST } from '../src/audio/genres';
@@ -9,10 +10,15 @@ import { useFfmpegDecoder } from './node-decoder';
 
 useFfmpegDecoder();
 const [scheme = 'midi', secs = '3.2', ...only] = process.argv.slice(2);
+const extra = {
+  polish: process.env.SF_POLISH === '1',
+  bed: process.env.SF_BED === '1',
+  arrange: process.env.SF_ARRANGE ? { len: +process.env.SF_ARRANGE, shape: 'build' as const } : undefined,
+};
 let bad = 0;
 for (const g of GENRE_LIST) {
   if (only.length && !only.includes(g.id)) continue;
-  const song = composeSong({ genre: g.id as GenreId, seed: 11, animSeconds: +secs, sync: true, tempo: 1, key: -1 });
+  const song = composeSong({ genre: g.id as GenreId, seed: 11, animSeconds: +secs, sync: true, tempo: 1, key: -1, ...extra });
   const t0 = performance.now();
   const pcm = await renderScheme(song, scheme as SchemeId, { sr: 44100, seed: 11 });
   const ms = Math.round(performance.now() - t0);
@@ -34,7 +40,7 @@ for (const g of GENRE_LIST) {
 // 名曲：每首用它建議的編曲渲染一次（指定曲風時略過）
 if (!only.length) {
   for (const p of PIECES) {
-    const song = composeSong({ genre: p.genre, seed: 11, animSeconds: +secs, sync: true, tempo: 1, key: -1, piece: p.id });
+    const song = composeSong({ genre: p.genre, seed: 11, animSeconds: +secs, sync: true, tempo: 1, key: -1, piece: p.id, polish: extra.polish });
     const t0 = performance.now();
     const pcm = await renderScheme(song, scheme as SchemeId, { sr: 44100, seed: 11 });
     const ms = Math.round(performance.now() - t0);
