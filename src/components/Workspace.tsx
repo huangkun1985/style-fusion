@@ -125,7 +125,7 @@ export function MobileBar() {
   const b = 'flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-[14px]';
   return (
     <nav aria-label="常用動作" className="flex h-16 shrink-0 items-center gap-2 border-t border-line bg-panel px-4">
-      <button type="button" className={`${b} border border-line-2 text-fg`} title="風格：挑一組風格套上" onClick={() => set({ starterOpen: true, starterFor: 'start' })}>
+      <button type="button" className={`${b} border border-line-2 text-fg`} title="風格：打開風格牆，一次看 9 種風格，點一格就套用" onClick={() => set({ wall: !useStore.getState().wall })}>
         <LayoutGrid size={16} /> 風格
       </button>
       <button type="button" className={`${b} border border-line-2 text-fg`} title="重抽：風格、動效、主體、音樂一起隨機；不喜歡按復原退回" onClick={() => randomize()}>

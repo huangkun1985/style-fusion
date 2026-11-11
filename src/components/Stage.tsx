@@ -13,6 +13,7 @@ import { addStampNow } from '../agent/session';
 import { useLookMove } from '../store/hooks';
 import { useStore, type Aspect } from '../store/store';
 import { SUBJECT_ICON } from './icons';
+import { StyleWall } from './StyleWall';
 import { IconBtn, Segmented } from './ui';
 
 /** fit（填滿）的比例會由舞台依實際大小即時更新；導出與截圖用的是更新後的值 */
@@ -35,6 +36,7 @@ function gridSubjects(current: SubjectId): SubjectId[] {
 export function Stage({ fill = false, simple = false, compact = false }: { fill?: boolean; simple?: boolean; compact?: boolean }) {
   const showingA = useStore((s) => s.hist.showingA);
   const previewing = useStore((s) => s.hist.previewing);
+  const wallOpen = useStore((s) => s.wall);
   const comparing = useStore((s) => s.hist.comparing);
   const { look, move, tune, v, m } = useLookMove();
   const subject = useStore((s) => s.subject);
@@ -56,6 +58,7 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
   // 全螢幕：先立刻把舞台鋪滿整個視窗（任何環境都有效、馬上看得到），同時向瀏覽器要求真正的全螢幕；
   // 瀏覽器答應了就升級成原生全螢幕。有些內嵌視窗與手機瀏覽器不回應或拒絕，那就維持鋪滿視窗。
   const [fs, setFs] = useState<'off' | 'native' | 'css'>('off');
+  const wall = wallOpen && fs === 'off';
   const fsRef = useRef(fs);
   fsRef.current = fs;
   const [ctl, setCtl] = useState(true);
@@ -225,7 +228,7 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
         style={fs !== 'off' ? { cursor: ctl ? undefined : 'none' } : fill ? undefined : aspect === 'fit' ? { height: compact ? '36vh' : '62vh' } : { aspectRatio: String(ASPECT[aspect]), maxHeight: compact ? '36vh' : '62vh' }}
       >
         <div className={`relative overflow-hidden bg-stage ${fs !== 'off' ? '' : 'rounded-xl shadow-[var(--shadow)] ring-1 ring-line'}`} style={{ width: box.w, height: box.h }}>
-          {!grid4 ? (
+          {wall ? null : !grid4 ? (
             <>
               <canvas ref={canvasRef} className="block size-full" aria-label="風格混合即時預覽" role="img" />
               <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 size-full" aria-hidden />
@@ -242,7 +245,7 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
               ))}
             </div>
           )}
-          <StageBadges />
+          {!wall && <StageBadges />}
           {mixEmpty && (
             <div className="pointer-events-none absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-black/60 px-3 py-1 text-xs text-white">{simple ? '按播放列的「風格」挑一組，或按「重抽」' : '從左側風格庫點選，開始混合'}</div>
           )}
@@ -271,6 +274,8 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
           {fs !== 'off' && <FsBar visible={ctl} onExit={() => void exitFs()} />}
           {!glOk && <div className="absolute left-2 bottom-2 rounded bg-danger/90 px-2 py-1 text-[11px] text-white">此瀏覽器不支援 WebGL2，後期特效已停用</div>}
         </div>
+        {/* 風格牆蓋住整個舞台區（不只是畫面比例的那一塊）；主畫面的 canvas 拿掉，主渲染迴圈就不畫 */}
+        {wall && <StyleWall />}
       </div>
       {simple ? <SimpleTransport /> : <Transport />}
       {!simple && <SubjectBar />}
@@ -311,6 +316,7 @@ function StageBadges() {
 
 function Transport() {
   const { move, tune, look } = useLookMove();
+  const wallOn = useStore((s) => s.wall);
   const subject = useStore((s) => s.subject);
   const aspect = useStore((s) => s.aspect);
   const onion = useStore((s) => s.onion);
@@ -416,6 +422,9 @@ function Transport() {
         <IconBtn label={soundOn ? '關閉聲音（M）' : '開啟聲音：背景音樂＋音效（M）'} active={soundOn} onClick={() => void toggleSound()}>
           {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
         </IconBtn>
+        <IconBtn label="風格牆：同一段內容一次看 9 種風格，點一格就套用。想換整體感覺時用" active={wallOn} onClick={() => set({ wall: !wallOn })}>
+          <LayoutGrid size={16} />
+        </IconBtn>
         <IconBtn label="存下目前畫面（PNG）" onClick={snapshot}>
           <Camera size={16} />
         </IconBtn>
@@ -437,6 +446,7 @@ function Transport() {
 /** 簡潔模式的播放列（高 48）：播放、時間碼、時間軸、聲音 ｜ 風格、重抽、全螢幕。按鈕都是固定寬度，順序不變 */
 function SimpleTransport() {
   const { move, tune } = useLookMove();
+  const wall = useStore((s) => s.wall);
   const subject = useStore((s) => s.subject);
   const soundOn = useStore((s) => s.audio.on);
   const set = useStore((s) => s.set);
@@ -504,7 +514,13 @@ function SimpleTransport() {
         <span className="hidden xl:inline">附上時間點</span>
       </button>
       <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-line sm:block" aria-hidden />
-      <button type="button" className={`${btn} hidden w-[76px] sm:flex`} title="風格：從 12 個起點與案例配方挑一組風格套上。想換整體感覺時用" onClick={() => set({ starterOpen: true, starterFor: 'start' })}>
+      <button
+        type="button"
+        aria-pressed={wall}
+        className={`${btn} hidden w-[76px] sm:flex ${wall ? 'border-mot bg-mot-soft text-mot' : ''}`}
+        title="風格：打開風格牆，同一段內容一次看 9 種風格，點一格就套用。想換整體感覺時用（再按一次回到舞台）"
+        onClick={() => set({ wall: !wall })}
+      >
         <LayoutGrid size={15} /> 風格
       </button>
       <button type="button" className={`${btn} hidden w-[76px] sm:flex`} title="重抽（R）：風格、動效、主體、微調、音樂一起隨機；鎖定的不變。找靈感時用，不喜歡就按 Ctrl+Z 退回" onClick={() => randomize()}>

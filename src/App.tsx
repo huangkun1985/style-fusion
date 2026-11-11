@@ -202,6 +202,10 @@ export default function App() {
       const s = useStore.getState();
       // 任何彈出視窗（起點選擇、匯入主題、關於、導出、分享、風格詳情…）開著時，快捷鍵不作用在背後的舞台
       if (s.view !== 'mixer' || s.detail || s.exportOpen || s.shareOpen || s.starterOpen || s.themeOpen || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (e.key === 'Escape' && s.wall) {
+        s.set({ wall: false });
+        return;
+      }
       if (e.code === 'Space') {
         e.preventDefault();
         clock.play();

@@ -18,6 +18,7 @@ import { is3D, type SubjectId, type Tune } from '../engine/types';
 import { isSubjectId, MAX_PER_KIND, sanitizeSels, sanitizeTune } from './sanitize';
 import { cleanMusic, decodeMix, musicOf, type MusicPrefs } from './share';
 
+import type { WallFilter } from '../lib/styleWall';
 import type { AgentDraft, Aspect, ChatMsg, SavedMix, Scene, Stamp } from './project';
 
 export type { Aspect, SavedMix } from './project';
@@ -100,6 +101,10 @@ interface State {
   agentEffort: 'low' | 'high';
   /** 使用者看過「內容會送到你的 Claude 帳號」的說明；偏好 */
   agentConsent: boolean;
+  /** 風格牆（α3）：開著時舞台換成 3×3；篩選與第幾批（換一批＋1）不存檔 */
+  wall: boolean;
+  wallFilter: WallFilter;
+  wallBatch: number;
 
   set: (p: Partial<State>) => void;
   toggle: (kind: Kind, id: string) => void;
@@ -242,6 +247,9 @@ export const useStore = create<State>()((set, get) => ({
       stamps: [],
       agentEffort: 'low',
       agentConsent: false,
+      wall: false,
+      wallFilter: 'all',
+      wallBatch: 1,
 
       set: (p) => set(p),
       toggle: (kind, id) => {
