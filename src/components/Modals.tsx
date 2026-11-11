@@ -157,7 +157,7 @@ export function StyleDetailModal() {
 const FORMATS: { id: ExportFormat; name: string; note: string }[] = [
   { id: 'gif', name: 'GIF 動圖', note: '社群、貼圖、簡報，自動循環' },
   { id: 'mp4', name: 'MP4 影片', note: 'H.264，可直接放進剪輯軟體' },
-  { id: 'webm', name: 'WebM 影片', note: '不支援 MP4 編碼時的替代（即時錄製）' },
+  { id: 'webm', name: 'WebM 影片', note: '不支援 MP4 編碼時的替代（即時錄製：導出時請停在這個分頁）' },
   { id: 'zip', name: 'PNG 序列', note: '逐幀 PNG 打包成 ZIP，可匯入 AE' },
   { id: 'sprite', name: '精靈圖', note: '所有幀排成一張大圖，給遊戲引擎' },
   { id: 'png', name: '單張 PNG', note: '目前這一幀' },

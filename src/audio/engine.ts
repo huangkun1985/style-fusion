@@ -455,9 +455,13 @@ class AudioEngine {
   // ---------- 導出 ----------
   /** 混出 seconds 秒的音訊（BGM＋音效），供 WAV／影片使用 */
   async exportMix(seconds: number): Promise<Stereo | null> {
-    const got = await this.ensurePcm();
-    if (!this.scene || !this.tracker) return null;
     const p = this.prefs;
+    // 審查 R-10：等待渲染的期間計畫又變了（視窗量到新比例、主題重新載入…），這次的渲染會被作廢而拿到 null。
+    // 以前會照樣混出「沒有音樂」的音軌而不報錯；現在重試一次，還是沒有就丟出錯誤，讓導出視窗告訴使用者
+    let got = await this.ensurePcm();
+    if (p.bgm && !got?.pcm) got = await this.ensurePcm();
+    if (p.bgm && !got?.pcm) throw new Error('音樂還在準備，請等一下再導出一次');
+    if (!this.scene || !this.tracker) return null;
     return mixdown({
       seconds,
       sr: SAMPLE_RATE,

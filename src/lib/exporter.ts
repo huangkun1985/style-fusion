@@ -136,19 +136,26 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
     const { total, n } = frameCount(job);
     if (job.format === 'gif') {
       const gif = GIFEncoder();
-      const delay = 1000 / job.fps;
-      for (let i = 0; i < n; i++) {
+      // 審查 R-11：GIF 的延遲單位是 1/100 秒，gifenc 會把每格四捨五入（24 fps → 每格 4 單位＝25 fps，快 4%）。
+      // 改成累進：第 i 格的延遲＝round((i+1)×100/fps) − round(i×100/fps)，每格差一點但總長度精準，和音樂、MP4 對得上
+      // 瀏覽器會把小於 2/100 秒的延遲當成 10/100 秒播（很慢），所以 GIF 最多 50 fps：超過就按時間抽格，總長度不變
+      const gfps = Math.min(job.fps, 50);
+      const gn = gfps === job.fps ? n : frameCount({ ...job, fps: gfps }).n;
+      const cs = (i: number) => Math.round((i * 100) / gfps);
+      for (let i = 0; i < gn; i++) {
+        const delay = (cs(i + 1) - cs(i)) * 10;
         if (signal?.aborted) throw new Error('已取消');
-        draw((i / job.fps) % total);
+        draw((i / gfps) % total);
         const data = ctx.getImageData(0, 0, job.w, job.h).data;
         const palette = quantize(data, 256);
         const index = applyPalette(data, palette);
         gif.writeFrame(index, job.w, job.h, { palette, delay });
-        onProgress((i + 1) / n);
+        onProgress((i + 1) / gn);
         if (i % 2 === 0) await tick();
       }
       gif.finish();
-      return { blob: new Blob([gif.bytes() as BlobPart], { type: 'image/gif' }), name: `${base}.gif` };
+      const note = gfps < job.fps ? `GIF 最多 50 fps（瀏覽器播不出更快的 GIF），這次用 50 fps 輸出，長度不變。要 ${job.fps} fps 請用 MP4。` : undefined;
+      return { blob: new Blob([gif.bytes() as BlobPart], { type: 'image/gif' }), name: `${base}.gif`, note };
     }
     if (job.format === 'mp4') {
       if (!canMp4) throw new Error('這個瀏覽器不支援 WebCodecs，請改用 WebM 或 GIF');
@@ -163,6 +170,15 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
       });
       let encErr: Error | null = null;
       const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => (encErr = e as Error) });
+      // 審查 R-13：成功、失敗、取消都要關掉編碼器（不然佔著硬體編碼資源）
+      const closeEnc = () => {
+        try {
+          if (enc.state !== 'closed') enc.close();
+        } catch {
+          /* 已關 */
+        }
+      };
+      try {
       const codecs = ['avc1.640033', 'avc1.4d0033', 'avc1.42003e', 'avc1.640028', 'avc1.42001f'];
       let chosen = '';
       for (const c of codecs) {
@@ -195,6 +211,9 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
       muxer.finalize();
       const note = job.audio && !audioChoice ? '這個瀏覽器無法編碼音訊，影片沒有聲音。可到「聲音」分頁導出 WAV，再用剪輯軟體合成。' : undefined;
       return { blob: new Blob([muxer.target.buffer], { type: 'video/mp4' }), name: `${base}.mp4`, note };
+      } finally {
+        closeEnc();
+      }
     }
     if (job.format === 'webm') {
       const stream = cv.captureStream(0);
@@ -212,22 +231,31 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
       sound?.start();
       // 以真實時間節奏推送幀（MediaRecorder 需要即時）
       const t0 = performance.now();
-      for (let i = 0; i < n; i++) {
-        if (signal?.aborted) {
-          rec.stop();
-          sound?.close();
-          throw new Error('已取消');
+      // 審查 R-12：WebM 是照真實時間錄的；畫一格比 1/fps 秒還久、或分頁被切到背景，畫面就會落後聲音。量出來就告訴使用者
+      let lagFrames = 0;
+      try {
+        for (let i = 0; i < n; i++) {
+          if (signal?.aborted) throw new Error('已取消');
+          draw(i / job.fps);
+          track.requestFrame?.();
+          onProgress((i + 1) / n);
+          const target = t0 + ((i + 1) * 1000) / job.fps;
+          lagFrames = Math.max(lagFrames, ((performance.now() - target) * job.fps) / 1000);
+          await new Promise((r2) => setTimeout(r2, Math.max(0, target - performance.now())));
         }
-        draw(i / job.fps);
-        track.requestFrame?.();
-        onProgress((i + 1) / n);
-        const target = t0 + ((i + 1) * 1000) / job.fps;
-        await new Promise((r2) => setTimeout(r2, Math.max(0, target - performance.now())));
+        rec.stop();
+        await done;
+      } finally {
+        // 審查 R-13：成功、取消、畫格出錯都要停錄影器、關音訊、停掉畫面串流
+        if (rec.state !== 'inactive') rec.stop();
+        sound?.close();
+        for (const t of stream.getTracks()) t.stop();
       }
-      rec.stop();
-      await done;
-      sound?.close();
-      const note = job.audio && !sound ? '這個瀏覽器沒有讓網頁錄製音訊，影片沒有聲音。可改用 MP4，或到「聲音」分頁導出 WAV 再合成。' : undefined;
+      const notes = [
+        job.audio && !sound ? '這個瀏覽器沒有讓網頁錄製音訊，影片沒有聲音。可改用 MP4，或到「聲音」分頁導出 WAV 再合成。' : '',
+        lagFrames > 2 ? `錄製時畫面最多落後 ${Math.round(lagFrames)} 格（畫面太重或分頁被切到背景），影片裡畫面可能和聲音對不上。建議改用 MP4（逐格輸出，不會錯開），或導出時停在這個分頁。` : '',
+      ].filter(Boolean);
+      const note = notes.length ? notes.join(' ') : undefined;
       return { blob: new Blob(chunks, { type: 'video/webm' }), name: `${base}.webm`, note };
     }
     if (job.format === 'zip') {
@@ -291,16 +319,19 @@ async function webmAudio(pcm: Stereo): Promise<{ track: MediaStreamTrack; start:
       void ctx.close();
       return null;
     }
+    let closed = false;
     return {
       track,
       start: () => src.start(),
       close: () => {
+        if (closed) return;
+        closed = true;
         try {
           src.stop();
         } catch {
           /* 已停止 */
         }
-        void ctx.close();
+        void ctx.close().catch(() => undefined);
       },
     };
   } catch {
