@@ -1,5 +1,5 @@
 // 舞台：主預覽（可四宮格）、軌跡間距疊圖、播放控制、主體切換。
-import { Camera, Grid2x2, Layers, Maximize, Minimize, Pause, Play, Spline, StepBack, StepForward, Upload, Volume2, VolumeX } from 'lucide-react';
+import { Camera, Dices, Grid2x2, LayoutGrid, Layers, Maximize, Minimize, Pause, Play, Spline, StepBack, StepForward, Upload, Volume2, VolumeX } from 'lucide-react';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { clock } from '../engine/clock';
 import { Renderer, loopSeconds, type FrameSpec } from '../engine/renderer';
@@ -30,7 +30,9 @@ function gridSubjects(current: SubjectId): SubjectId[] {
   return [current, ...pref.filter((s) => s !== current)].slice(0, 4);
 }
 
-export function Stage({ fill = false }: { fill?: boolean }) {
+/** compact：手機用，舞台矮一點（36vh），讓下面的 Agent 有空間；外層會把舞台與播放列貼在頂端 */
+export function Stage({ fill = false, simple = false, compact = false }: { fill?: boolean; simple?: boolean; compact?: boolean }) {
+  const showingA = useStore((s) => s.hist.showingA);
   const { look, move, tune, v, m } = useLookMove();
   const subject = useStore((s) => s.subject);
   const aspect = useStore((s) => s.aspect);
@@ -217,7 +219,7 @@ export function Stage({ fill = false }: { fill?: boolean }) {
         onDoubleClick={() => toggleStageFullscreen()}
         onMouseMove={fs !== 'off' ? showCtl : undefined}
         className={`${fs === 'css' ? 'fixed inset-0 z-[70]' : 'relative'} flex w-full items-center justify-center ${fs !== 'off' ? 'bg-black' : fill ? 'min-h-0 flex-1' : ''}`}
-        style={fs !== 'off' ? { cursor: ctl ? undefined : 'none' } : fill ? undefined : aspect === 'fit' ? { height: '62vh' } : { aspectRatio: String(ASPECT[aspect]), maxHeight: '62vh' }}
+        style={fs !== 'off' ? { cursor: ctl ? undefined : 'none' } : fill ? undefined : aspect === 'fit' ? { height: compact ? '36vh' : '62vh' } : { aspectRatio: String(ASPECT[aspect]), maxHeight: compact ? '36vh' : '62vh' }}
       >
         <div className={`relative overflow-hidden bg-stage ${fs !== 'off' ? '' : 'rounded-xl shadow-[var(--shadow)] ring-1 ring-line'}`} style={{ width: box.w, height: box.h }}>
           {!grid4 ? (
@@ -239,7 +241,7 @@ export function Stage({ fill = false }: { fill?: boolean }) {
           )}
           <StageBadges />
           {mixEmpty && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-black/60 px-3 py-1 text-xs text-white">從左側風格庫點選，開始混合</div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-black/60 px-3 py-1 text-xs text-white">{simple ? '按播放列的「風格」挑一組，或按「重抽」' : '從左側風格庫點選，開始混合'}</div>
           )}
           {idle && (
             <button
@@ -257,12 +259,13 @@ export function Stage({ fill = false }: { fill?: boolean }) {
               <span className="text-xs opacity-80">已依系統「減少動態效果」設定，預設暫停</span>
             </button>
           )}
+          {showingA && <div className="pointer-events-none absolute left-2 top-2 rounded-md border border-mot bg-black/70 px-2 py-0.5 text-[12px] font-semibold text-white">A（放開滑鼠回到現在的 B）</div>}
           {fs !== 'off' && <FsBar visible={ctl} onExit={() => void exitFs()} />}
           {!glOk && <div className="absolute left-2 bottom-2 rounded bg-danger/90 px-2 py-1 text-[11px] text-white">此瀏覽器不支援 WebGL2，後期特效已停用</div>}
         </div>
       </div>
-      <Transport />
-      <SubjectBar />
+      {simple ? <SimpleTransport /> : <Transport />}
+      {!simple && <SubjectBar />}
     </div>
   );
 }
@@ -419,6 +422,75 @@ function Transport() {
           options={(['fit', '16:9', '4:3', '1:1', '9:16'] as Aspect[]).map((a) => ({ value: a, label: ASPECT_LABEL[a], title: a === 'fit' ? '填滿：用掉舞台區所有空間（導出時用目前的長寬比）' : `畫面比例 ${a}` }))}
         />
       </div>
+    </div>
+  );
+}
+
+/** 簡潔模式的播放列（高 48）：播放、時間碼、時間軸、聲音 ｜ 風格、重抽、全螢幕。按鈕都是固定寬度，順序不變 */
+function SimpleTransport() {
+  const { move, tune } = useLookMove();
+  const subject = useStore((s) => s.subject);
+  const soundOn = useStore((s) => s.audio.on);
+  const set = useStore((s) => s.set);
+  const randomize = useStore((s) => s.randomize);
+  useStore((s) => s.themeRev);
+  const L = loopSeconds(SUBJECTS[subject], move, tune);
+  const rangeRef = useRef<HTMLInputElement>(null);
+  const timeRef = useRef<HTMLSpanElement>(null);
+  const [playing, setPlaying] = useState(clock.playing);
+  useEffect(() => {
+    let raf = 0;
+    const mmss = (x: number) => `${String(Math.floor(x / 60)).padStart(2, '0')}:${(x % 60).toFixed(2).padStart(5, '0')}`;
+    const upd = () => {
+      raf = requestAnimationFrame(upd);
+      const t = ((clock.t % L) + L) % L;
+      if (rangeRef.current && document.activeElement !== rangeRef.current) rangeRef.current.value = String(t / L);
+      if (timeRef.current) timeRef.current.textContent = `${mmss(t)} / ${mmss(L)}`;
+    };
+    upd();
+    const off = clock.on(() => setPlaying(clock.playing));
+    return () => {
+      cancelAnimationFrame(raf);
+      off();
+    };
+  }, [L]);
+  const btn = 'flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-line-2 text-[13px] text-fg hover:bg-raise';
+  return (
+    <div className="flex h-12 shrink-0 items-center gap-1 rounded-xl border border-line bg-panel px-1.5 sm:gap-2 sm:px-2">
+      <button type="button" aria-label={playing ? '暫停' : '播放'} title={`${playing ? '暫停' : '播放'}（空白鍵）。看動畫、停在某一格檢查細節時用`} onClick={() => clock.play()} className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg bg-raise text-fg">
+        {playing ? <Pause size={17} /> : <Play size={17} />}
+      </button>
+      <span ref={timeRef} className="num hidden w-[150px] shrink-0 text-[13px] text-fg-2 sm:inline" aria-label="目前時間／循環長度" />
+      <input
+        ref={rangeRef}
+        id="timeline-simple"
+        aria-label="時間軸"
+        title="時間軸：拖動跳到某一格。檢查某個瞬間的動作時用"
+        type="range"
+        className="timeline min-w-0 flex-1"
+        min={0}
+        max={1}
+        step={0.001}
+        defaultValue={0}
+        onInput={(e) => {
+          const p = parseFloat((e.target as HTMLInputElement).value);
+          clock.play(false);
+          clock.set(Math.floor(clock.t / L) * L + p * L);
+        }}
+      />
+      <IconBtn label={soundOn ? '關閉聲音（M）。不想被音樂打擾時用' : '開啟聲音（M）：背景音樂＋音效。想聽這組風格配的音樂時用'} active={soundOn} onClick={() => void toggleSound()} className="size-9">
+        {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+      </IconBtn>
+      <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-line sm:block" aria-hidden />
+      <button type="button" className={`${btn} hidden w-[76px] sm:flex`} title="風格：從 12 個起點與案例配方挑一組風格套上。想換整體感覺時用" onClick={() => set({ starterOpen: true, starterFor: 'start' })}>
+        <LayoutGrid size={15} /> 風格
+      </button>
+      <button type="button" className={`${btn} hidden w-[76px] sm:flex`} title="重抽（R）：風格、動效、主體、微調、音樂一起隨機；鎖定的不變。找靈感時用，不喜歡就按 Ctrl+Z 退回" onClick={() => randomize()}>
+        <Dices size={15} /> 重抽
+      </button>
+      <IconBtn label="全螢幕展示（F；在畫面上連點兩下也可以）。給客戶看、投影時用" onClick={() => toggleStageFullscreen()} className="size-9">
+        <Maximize size={16} />
+      </IconBtn>
     </div>
   );
 }

@@ -21,9 +21,14 @@ import type { Palette } from '../engine/types';
 import { PAL_KEYS } from '../engine/resolve';
 import { ROLE_NAME } from '../lib/brief';
 
-export function InfoPanel({ tab: forced }: { tab?: InfoTab }) {
-  const tab = useStore((s) => s.infoTab);
+const TAB_LABEL: Record<InfoTab, string> = { brief: '處方', sound: '聲音', tune: '微調', code: '代碼', prompt: 'AI 提示詞' };
+
+/** tab：固定顯示某一頁（不顯示分頁列）；only：只列出這幾頁（2.0 右側面板的「規格」頁籤＝處方、代碼、AI 提示詞） */
+export function InfoPanel({ tab: forced, only }: { tab?: InfoTab; only?: InfoTab[] }) {
+  const stored = useStore((s) => s.infoTab);
   const set = useStore((s) => s.set);
+  const list: InfoTab[] = only ?? ['brief', 'sound', 'tune', 'code', 'prompt'];
+  const tab = list.includes(stored) ? stored : list[0];
   const cur = forced ?? tab;
   const scrollRef = useRef<HTMLDivElement>(null);
   // 換分頁時回到頂端，才看得到該分頁最上面的說明
@@ -38,13 +43,7 @@ export function InfoPanel({ tab: forced }: { tab?: InfoTab }) {
           value={tab}
           onChange={(t: InfoTab) => set({ infoTab: t })}
           className="w-full [&>button]:flex-1"
-          options={[
-            { value: 'brief', label: '處方' },
-            { value: 'sound', label: '聲音' },
-            { value: 'tune', label: '微調' },
-            { value: 'code', label: '代碼' },
-            { value: 'prompt', label: 'AI 提示詞' },
-          ]}
+          options={list.map((t) => ({ value: t, label: TAB_LABEL[t] }))}
         />
       )}
       <div ref={scrollRef} className="scroll-y -mr-1 min-h-0 flex-1 pr-1">

@@ -1,7 +1,7 @@
 {
   "name": "style-fusion",
   "private": true,
-  "version": "1.4.0",
+  "version": "2.0.0-alpha.1",
   "description": "動效設計風格混合器：圖像風格 × 動效風格 即時混搭與參考工具",
   "type": "module",
   "engines": {
@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "preview:web": "vite preview --mode web --port 4181 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test:audio": "tsx scripts/audio-test.ts && tsx scripts/midi-import-test.ts && tsx scripts/theme-test.ts && tsx scripts/arrange-test.ts",
+    "test:audio": "tsx scripts/audio-test.ts && tsx scripts/midi-import-test.ts && tsx scripts/theme-test.ts && tsx scripts/arrange-test.ts && tsx scripts/share-test.ts",
     "samples:build": "node scripts/samples/build.mjs",
     "audio:sweep": "tsx scripts/audio-sweep.ts"
   },

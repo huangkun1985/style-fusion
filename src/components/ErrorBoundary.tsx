@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
       <div role="alert" className="flex h-full items-center justify-center p-6">
         <div className="max-w-md rounded-2xl border border-line bg-panel p-6 text-center shadow-lg">
           <h1 className="font-display text-lg font-bold">畫面發生錯誤</h1>
-          <p className="mt-2 text-sm leading-relaxed text-fg-2">多半是舊版或損壞的本機資料造成的。先重新載入；如果還是一樣，就清除本機資料（收藏的配方也會一起清掉）。</p>
+          <p className="mt-2 text-sm leading-relaxed text-fg-2">多半是舊版或損壞的本機資料造成的。先重新載入；如果還是一樣，就清除本機資料（專案與我的配方也會一起清掉；有存成檔案的可以再開回來）。</p>
           <p className="num mt-3 break-words rounded-lg bg-panel-2 px-3 py-2 text-left text-[11px] text-fg-3">{error.message}</p>
           <div className="mt-4 flex justify-center gap-2">
             <button type="button" onClick={() => location.reload()} className="rounded-lg bg-mot px-4 py-2 text-sm font-semibold text-on-mot">

@@ -34,18 +34,28 @@ export function StarterModal() {
   const apply = useStore((s) => s.applyRecipe);
   const audioOn = useStore((s) => s.audio.on);
   const list = useStarters();
-  const close = () => set({ starterOpen: false, welcomed: true });
+  const forAgent = useStore((s) => s.starterFor === 'agent');
+  const close = () => set({ starterOpen: false, welcomed: true, starterFor: 'start' });
   // 在點擊手勢內順便喚醒 AudioContext，這樣套用後音樂能立刻響起
   const pick = (r: Recipe) => {
     if (audioOn) void audioEngine.unlock();
+    if (forAgent) {
+      // 替 Agent 選風格模板：只換風格與動效，主體（正在做的內容）不動
+      const st = useStore.getState();
+      st.setAgent({ template: r.id });
+      set({ v: r.v.map(([id, w]) => ({ id, w })), m: r.m.map(([id, w]) => ({ id, w })), starterOpen: false, starterFor: 'start', welcomed: true });
+      st.showToast(`風格模板換成「${r.name}」；初始提示詞的風格規格已跟著換`);
+      return;
+    }
     apply(r);
+    useStore.getState().setAgent({ template: r.id });
   };
   return (
     <Modal
       open={open}
       onClose={close}
       wide
-      title="選一個起點"
+      title={forAgent ? '選一個風格模板' : '選一組風格'}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label htmlFor="starter-sound" className="flex cursor-pointer items-center gap-2 text-[13px] text-fg-2">
@@ -57,15 +67,20 @@ export function StarterModal() {
             <Button variant="outline" onClick={() => pick(list[Math.floor(Math.random() * list.length)].recipe)}>
               <Dices size={15} /> 隨機一個
             </Button>
+            <Button variant="ghost" onClick={() => { close(); set({ view: 'recipes' }); }}>
+              看全部 56 個案例配方
+            </Button>
             <Button variant="ghost" onClick={close}>
-              略過，保留目前的混合
+              {forAgent ? '取消' : '略過，保留目前的混合'}
             </Button>
           </div>
         </div>
       }
     >
       <p className="mb-4 max-w-3xl text-sm leading-relaxed text-fg-2">
-        每個起點都是一組完整的「圖像風格 × 動效風格 × 主體」，涵蓋復古遊戲、經典卡通、3D 渲染、東方水墨、設計海報等不同方向。選一個開始，之後可以隨意增減風格、調強度。
+        {forAgent
+          ? '風格模板決定 Agent 生成時的色板、線條、動效與幀率。選一個，初始提示詞裡的「風格規格」會跟著換；舞台上的內容不變，只換風格。'
+          : '每個起點都是一組完整的「圖像風格 × 動效風格 × 主體」，涵蓋復古遊戲、經典卡通、3D 渲染、東方水墨、設計海報等不同方向。選一個開始，不喜歡可以按 Ctrl+Z 退回。'}
       </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {list.map(({ theme, recipe, v, m }) => (

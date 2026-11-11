@@ -12,8 +12,9 @@
   --fg: #ecedf3;
   --fg-2: #a3a7b7;
   --fg-3: #8d92a5;
-  --vis: #6cd4ff;
-  --vis-soft: rgba(108, 212, 255, 0.14);
+  /* 2.0：介面只用琥珀一個色相；「圖像風格」改用中性的亮灰，和「動效風格」的琥珀靠位置與文字區分（決定表第 9 項） */
+  --vis: #c3c6d2;
+  --vis-soft: rgba(195, 198, 210, 0.12);
   --mot: #ffb648;
   --mot-soft: rgba(255, 182, 72, 0.14);
   --accent: #ffb648;
@@ -39,8 +40,8 @@
     --fg: #14161c;
     --fg-2: #4b5163;
     --fg-3: #5a6073;
-    --vis: #076a96;
-    --vis-soft: rgba(10, 127, 181, 0.12);
+    --vis: #3d4354;
+    --vis-soft: rgba(61, 67, 84, 0.1);
     --mot: #965806;
     --mot-soft: rgba(180, 105, 10, 0.12);
     --accent: #ffb648;
@@ -63,8 +64,8 @@
   --fg: #14161c;
   --fg-2: #4b5163;
   --fg-3: #5a6073;
-  --vis: #076a96;
-  --vis-soft: rgba(10, 127, 181, 0.12);
+  --vis: #3d4354;
+  --vis-soft: rgba(61, 67, 84, 0.1);
   --mot: #965806;
   --mot-soft: rgba(180, 105, 10, 0.12);
   --accent: #ffb648;
@@ -144,6 +145,10 @@ h3 {
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--line-2) transparent;
+}
+/* 內容變長、出現捲軸時，不要讓整塊變窄而左右跳（2.0 右側面板） */
+.scroll-y.gutter-stable {
+  scrollbar-gutter: stable;
 }
 .scroll-x {
   overflow-x: auto;

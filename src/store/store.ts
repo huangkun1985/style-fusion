@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 import { snapAuditionToPlan } from '../audio/engine';
 import { sanitizeAudioPrefs } from '../audio/plan';
 import { PIECES } from '../audio/classics';
@@ -16,29 +15,21 @@ import { setSubjectVersion, type SubjectVer } from '../engine/subjects';
 import { thumbs } from '../engine/thumbs';
 import { themes } from '../engine/themes';
 import { is3D, type SubjectId, type Tune } from '../engine/types';
-import { safeStorage } from '../lib/platform';
-import { isSubjectId, sanitizeSels, sanitizeTune } from './sanitize';
+import { isSubjectId, MAX_PER_KIND, sanitizeSels, sanitizeTune } from './sanitize';
 import { cleanMusic, decodeMix, musicOf, type MusicPrefs } from './share';
 
+import type { AgentDraft, Aspect, SavedMix, Scene } from './project';
+
+export type { Aspect, SavedMix } from './project';
 export type View = 'mixer' | 'library' | 'recipes' | 'saved';
-/** fit：填滿舞台區的所有空間（比例跟著視窗走）；其餘是固定比例 */
-export type Aspect = 'fit' | '16:9' | '4:3' | '1:1' | '9:16';
-const ASPECTS: Record<Aspect, true> = { fit: true, '16:9': true, '4:3': true, '1:1': true, '9:16': true };
+/** 2.0 版式：簡潔（預設：舞台、播放列、場景帶、Agent）／進階（再加素材庫、混合配方、右側的調整／聲音／規格） */
+export type UiMode = 'simple' | 'advanced';
+/** 右側面板的頁籤（進階模式才有後三個） */
+export type RightTab = 'agent' | 'tune' | 'sound' | 'spec';
+export type SaveState = 'saved' | 'saving' | 'error';
 export type InfoTab = 'brief' | 'sound' | 'tune' | 'code' | 'prompt';
 export type Kind = 'v' | 'm';
 export type ThemePref = 'system' | 'dark' | 'light';
-
-export interface SavedMix {
-  id: string;
-  name: string;
-  v: Sel[];
-  m: Sel[];
-  subject: SubjectId;
-  tune: Tune;
-  /** 音樂；舊的收藏沒有（載入時保留目前的音樂） */
-  audio?: MusicPrefs;
-  created: number;
-}
 
 interface State {
   view: View;
@@ -80,6 +71,28 @@ interface State {
   theme: ThemePref;
   toast: { id: number; text: string } | null;
 
+  // ----- 2.0：專案（目前場景的內容就是上面的 v／m／subject／tune／aspect／audio 的音樂部分） -----
+  projectId: string;
+  projectName: string;
+  projectCreated: number;
+  /** 全部場景；目前場景（activeScene）裡存的 mix 可能是舊的，存檔時以上面的即時欄位為準 */
+  scenes: Scene[];
+  activeScene: string;
+  agent: AgentDraft;
+  migratedFrom?: string;
+  saveState: SaveState;
+  /** 存在哪裡：IndexedDB、localStorage（IndexedDB 不能用時）、只在記憶體（兩者都不能用） */
+  storage: 'idb' | 'local' | 'memory';
+  /** 復原／重做與 A／B 的狀態（history.ts 維護，介面用來決定按鈕能不能按） */
+  hist: { undo: number; redo: number; a: boolean; showingA: boolean };
+  uiMode: UiMode;
+  rightTab: RightTab;
+  /** Agent 面板收成 48 px 的窄條 */
+  panelCollapsed: boolean;
+  /** 起點選擇器的用途：start＝套整組配方；agent＝替 Agent 選風格模板（只換風格，不換主體） */
+  starterFor: 'start' | 'agent';
+  setAgent: (p: Partial<AgentDraft>) => void;
+
   set: (p: Partial<State>) => void;
   toggle: (kind: Kind, id: string) => void;
   add: (kind: Kind, id: string) => void;
@@ -104,7 +117,6 @@ interface State {
   showToast: (text: string) => void;
 }
 
-const MAX_PER_KIND = 6;
 
 /** 第一次開啟時隨機挑一個起點案例，避免每個人看到的都是同一個畫面 */
 function randomStarter(): Recipe {
@@ -166,9 +178,7 @@ function randomAudio(cur: AudioPrefs): Partial<AudioPrefs> {
   };
 }
 
-export const useStore = create<State>()(
-  persist(
-    (set, get) => ({
+export const useStore = create<State>()((set, get) => ({
       view: 'mixer',
       v: FIRST.v.map(([id, w]) => ({ id, w })),
       m: FIRST.m.map(([id, w]) => ({ id, w })),
@@ -206,6 +216,20 @@ export const useStore = create<State>()(
       fitAr: 16 / 9,
       theme: 'system',
       toast: null,
+      projectId: '',
+      projectName: '我的專案',
+      projectCreated: Date.now(),
+      scenes: [],
+      activeScene: '',
+      agent: { template: FIRST.id, topic: '', seconds: 8 },
+      saveState: 'saved',
+      storage: 'memory',
+      hist: { undo: 0, redo: 0, a: false, showingA: false },
+      uiMode: 'simple',
+      rightTab: 'agent',
+      panelCollapsed: false,
+      starterFor: 'start',
+      setAgent: (p) => set({ agent: { ...get().agent, ...p } }),
 
       set: (p) => set(p),
       toggle: (kind, id) => {
@@ -252,7 +276,7 @@ export const useStore = create<State>()(
           starterOpen: false,
           welcomed: true,
         });
-        get().showToast(`已套用配方「${r.name}」`);
+        get().showToast(`已套用配方「${r.name}」；不滿意可以按 Ctrl+Z 復原`);
       },
       randomize: () => {
         const { v, m, locked } = get();
@@ -312,7 +336,7 @@ export const useStore = create<State>()(
           created: Date.now(),
         };
         set({ saved: [mix, ...s.saved] });
-        get().showToast(`已收藏「${mix.name}」`);
+        get().showToast(`已存成我的配方「${mix.name}」`);
       },
       loadSaved: (id) => {
         const it = get().saved.find((x) => x.id === id);
@@ -325,7 +349,7 @@ export const useStore = create<State>()(
       importCode: (code) => {
         const mix = decodeMix(code);
         if (!mix) return false;
-        set({ v: mix.v, m: mix.m, subject: mix.s, tune: sanitizeTune(mix.t ?? {}), ...(mix.a ? { audio: { ...get().audio, ...mix.a } } : {}), view: 'mixer' });
+        set({ v: sanitizeSels(mix.v, VISUAL_MAP), m: sanitizeSels(mix.m, MOTION_MAP), subject: mix.s, tune: sanitizeTune(mix.t ?? {}), ...(mix.a ? { audio: { ...get().audio, ...mix.a } } : {}), view: 'mixer' });
         return true;
       },
       importMidi: (bytes, name) => {
@@ -350,49 +374,7 @@ export const useStore = create<State>()(
           if (get().toast?.id === id) set({ toast: null });
         }, 2600);
       },
-    }),
-    {
-      name: 'style-fusion-v1',
-      version: 1,
-      storage: createJSONStorage(() => ({ getItem: safeStorage.getItem, setItem: (k: string, v: string) => void safeStorage.setItem(k, v), removeItem: safeStorage.removeItem })),
-      partialize: (s) => ({
-        v: s.v,
-        m: s.m,
-        subject: s.subject,
-        subjectVer: s.subjectVer,
-        aspect: s.aspect,
-        tune: s.tune,
-        saved: s.saved,
-        thumbsAnimate: s.thumbsAnimate,
-        motionOverride: s.motionOverride,
-        onion: s.onion,
-        path: s.path,
-        theme: s.theme,
-        quality: s.quality,
-        locked: s.locked,
-        browserKind: s.browserKind,
-        welcomed: s.welcomed,
-        audio: s.audio,
-      }),
-      merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<State>;
-        // 本機存檔可能來自舊版、被別的分頁寫壞、或被惡意的連結寫入：每一項都整理成合法的值
-        const v = p.v === undefined ? current.v : sanitizeSels(p.v, VISUAL_MAP);
-        const m = p.m === undefined ? current.m : sanitizeSels(p.m, MOTION_MAP);
-        const subjectVer: SubjectVer = p.subjectVer === 'v1' ? 'v1' : 'v2';
-        setSubjectVersion(subjectVer);
-        const subject = isSubjectId(p.subject) ? p.subject : current.subject;
-        const saved = Array.isArray(p.saved)
-          ? p.saved
-              .filter((x) => x && typeof x === 'object' && typeof x.id === 'string')
-              .map((x) => ({ ...x, name: typeof x.name === 'string' ? x.name : '未命名配方', v: sanitizeSels(x.v, VISUAL_MAP), m: sanitizeSels(x.m, MOTION_MAP), subject: isSubjectId(x.subject) ? x.subject : 'mascot', tune: sanitizeTune(x.tune) }))
-          : current.saved;
-        const aspect = p.aspect && Object.hasOwn(ASPECTS, p.aspect) ? p.aspect : current.aspect;
-        return { ...current, ...p, subjectVer, subject, saved, aspect, v, m, tune: sanitizeTune(p.tune ?? {}), audio: { ...sanitizeAudioPrefs(p.audio), on: false } };
-      },
-    },
-  ),
-);
+}));
 
 // 主題匯入、切換、刪除時，讓所有用到循環秒數與主體名稱的地方重算
 themes.onChange(() => useStore.setState((s) => ({ themeRev: s.themeRev + 1 })));

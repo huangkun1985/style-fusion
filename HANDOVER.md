@@ -1,6 +1,11 @@
 # Style Fusion 交接文件（Hand over）
 
 > 寫給**在新的 session 接手這個專案的人（或新的 Claude）**。
+> ## 🆕 2026-11-11：2.0 α1 清爽地基完成（v2.0.0-alpha.1，**未提交**）
+> **新 session 先讀 `docs/交接-2.0-alpha1後.md`，下一階段用 `docs/下個session的提示詞-2.0-α2.md`。** 設計：`docs/2.0設計提案.md`；驗收：`docs/驗收報告-v2.0.0-alpha.1.md`。
+> 還原點 `c15c4eb`（2.0 開工前，已推送）。α1 的改動等使用者說「提交」才 commit。
+> 2.0 的儲存與版式見本文件第 6.7 節；下面 1.x 時代的說明（`style-fusion-v1`、TopBar 分頁）已被取代，保留作歷史。
+>
 > **2026-10-09：v1.2.0 已提交並推送到私密倉庫 https://github.com/huangkun1985/style-fusion（標籤 v1.2.0）。階段總結與下階段重點：`docs/階段總結-v1.2.0與下階段重點.md`。**
 > 交接時間：2026-10-03（一個很長的 session 的結尾）　專案版本：**v1.2.0**
 > **git 狀態：最後一次提交是 `v1.1.2`（標籤 `v1.1.1`、`v1.1.2`）；v1.2.0 的所有改動（約 70 個檔案，含新增檔）都還沒有 commit、沒有打標籤。** 使用者還沒說要提交；新 session 開頭先 `git status` 確認，**不要自己 commit**，要問。
@@ -126,7 +131,7 @@ src/
     thumbs.ts         縮圖排程器（共用一個渲染器、有時間預算、含 3D 預熱）
   audio/              聲音系統（第 6 章詳述）；classics.ts（名曲）、midiImport.ts（匯入 MIDI）、xmCalibration.ts（自動產生）
   lib/                brief.ts（處方／代碼／AI 提示詞／給 Claude 的提示詞）、exporter.ts（導出）、sound.ts（開關聲音）、platform.ts
-  store/              store.ts（Zustand，localStorage 鍵 `style-fusion-v1`）、hooks.ts（useAudioPlan、useLookMove…）、share.ts（配方碼）
+  store/              store.ts（Zustand；2.0 起不自己存檔）、project.ts（專案型別與檢查）、persist.ts（IndexedDB／檔案／舊資料轉換）、history.ts（復原與 A／B）、hooks.ts、share.ts（配方碼）、sanitize.ts
 ```
 
 ## 6. 核心設計（先理解這些再改程式）
@@ -197,6 +202,13 @@ engine.ts（Web Audio）：BGM 渲染成 AudioBuffer 循環播放並跟著動畫
 
 ### 6.6 主體 v1／v2（1.2.0）
 v1 檔案**不要改**（使用者要比較新舊）；改設計請改 v2。新增主體 v2：寫在 `subjects/v2/`、登錄到 `v2/index.ts` 的 `SUBJECTS_V2_MAP`（沒登錄的沿用 v1）。v2 要沿用 v1 的 `loop`、`key`、`hero`、`events`、`cues`、`track`（所以動效、音樂、導出照舊），顏色只用色板角色，`detail` 低時略過細節。3D 的 v2 場景在 `three/scenes/v2/`，場景編號 `island2`、`shapes2`、`text2`、`character2`、`terrain2`。store 的 `subjectVer`（存檔，預設 v2）＋`setSubjectVer` 會同步模組內的版本、讓縮圖重畫並加 `themeRev`（讓循環秒數與聲音計畫重算）；音訊引擎的提示點重建條件含 `subjectVersion()`。檢查設計的方法：寫一個暫時的頁面把主體在多個時間點畫成接觸表，用本機小伺服器接收 canvas 的 PNG 再用 Read 看圖（內建瀏覽器截圖常逾時）。
+
+### 6.7 2.0 的專案、儲存、復原與版式（α1）
+- **資料**：`src/store/project.ts`（型別與逐欄檢查 `sanitizeProject`／`sanitizeMix`／`sanitizeRecipes`；`Project` → `scenes[]`（最多 12）＋`recipes`（我的配方）＋`agent`（初始提示詞草稿））。store 的 `v／m／subject／tune／aspect／audio` 仍是「目前場景」的即時內容；`scenes` 裡目前場景的 `mix` 可能是舊的，存檔時由 `persist.ts` 的 `currentProject()` 用即時欄位組回去。
+- **儲存**：`src/store/persist.ts`。`bootPersistence()` 在 `main.tsx` 畫出介面**之前**執行：選後端（IndexedDB `style-fusion`／localStorage `sf-projects-v2`／記憶體）→ 讀 `sf-prefs-v2` 偏好 → 讀 `sf-current-project` 指的專案（或最近更新的）→ 都沒有就把 `style-fusion-v1` 轉成專案（`migrateLegacy`，原資料不刪）→ 開始自動儲存（600 ms 防抖、分頁隱藏時立刻存）。偏好與專案分開：聲音開關、音量、版式、主題不跟著專案。**zustand 的 persist 已拿掉**。
+- **復原**：`src/store/history.ts`。訂閱 store，文件＝風格、動效、主體、微調、比例、音樂（不含 on／bgm／sfx／音量）；按下指標到放開合成一步，其餘同一事件循環合成一步；`resetHistory()` 在換專案時呼叫。A／B：`markA`／`showA(true|false)`／`clearA`；看 A 時 `hist.showingA` 為真，歷史與自動儲存都暫停。
+- **版式**：store 的 `uiMode`（simple／advanced）、`rightTab`（agent／tune／sound／spec）、`panelCollapsed`；`App.tsx` 的 `MixerView` 依寬度與模式排版；新區塊在 `components/Workspace.tsx`（`SceneStrip`、`RightPanel`、`AgentPanel` 手動模式、`MobileBar`）；`Stage` 的 `simple`／`compact` 參數；`TopBar.tsx` 是專案選單、儲存狀態、復原、A／B、模式開關。Agent 的提示詞在 `lib/agentPrompt.ts`（每個主體的示範主題、`styleSpec()`、`extractThemeJson()`）。
+- **測試陷阱**：在 App 頁面裡清儲存再重新整理沒用——`pagehide` 會把記憶體裡的專案與偏好寫回去。要清乾淨：先開同源但不跑 App 的頁面（例如 `/package.json`），在那裡刪 IndexedDB 與 `sf-*`，再開 `/`。進階播放列的相機鈕會真的下載 PNG 到專案根目錄（內建瀏覽器的下載位置），自動點按測試要跳過或攔截。
 
 ## 7. 常見工作怎麼做
 

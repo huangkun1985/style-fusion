@@ -45,7 +45,8 @@ export function StyleBrowser({ cols = 2 }: { cols?: number }) {
   const all: Style[] = kind === 'v' ? VISUAL : MOTION;
   const sug = useMemo(() => suggestions(v, m, 10), [v, m]);
   const list = useMemo(() => {
-    if (cat === 'rec') return kind === 'v' ? sug.visual : sug.motion;
+    if (cat === 'rec' && (kind === 'v' ? sug.visual : sug.motion).length) return kind === 'v' ? sug.visual : sug.motion;
+    if (cat === 'rec') return all;
     return all.filter((s) => (cat === 'all' || s.cat === cat) && matchStyle(s, q));
   }, [all, cat, q, kind, sug]);
   const hasRec = (kind === 'v' ? sug.visual : sug.motion).length > 0;
@@ -76,8 +77,9 @@ export function StyleBrowser({ cols = 2 }: { cols?: number }) {
       </label>
       <div className="flex items-start gap-1">
         <div ref={stripRef} className={`min-w-0 flex-1 gap-1 ${catOpen ? 'flex flex-wrap' : 'scroll-x hide-scrollbar flex flex-nowrap'}`} role="group" aria-label="風格分類">
-          <CatChip on={cat === 'all'} onClick={() => set({ browserCat: 'all' })} label="全部" n={all.length} />
-          {hasRec && <CatChip on={cat === 'rec'} onClick={() => set({ browserCat: 'rec', search: '' })} label="✦ 推薦搭配" accent />}
+          <CatChip on={cat === 'all'} onClick={() => set({ browserCat: 'all' })} label="全部" n={all.length} nWidth="3ch" />
+          {/* 推薦搭配一直佔著位置（沒有推薦時停用），清空或骰子之後後面的分類才不會左右跳 */}
+          <CatChip on={cat === 'rec'} disabled={!hasRec} title={hasRec ? '推薦搭配：和目前混合最搭的風格' : '推薦搭配：先在混合裡放一個風格，這裡才會有推薦'} onClick={() => set({ browserCat: 'rec', search: '' })} label="✦ 推薦搭配" accent />
           {cats.map((c) => (
             <CatChip key={c.id} on={cat === c.id} onClick={() => set({ browserCat: c.id, search: '' })} label={c.name} n={all.filter((s) => s.cat === c.id).length} accent3d={c.id === 'dim3d' || c.id === 'cam3d'} />
           ))}
@@ -133,16 +135,18 @@ function ReducedMotionNote() {
   );
 }
 
-function CatChip({ on, onClick, label, n, accent, accent3d }: { on: boolean; onClick: () => void; label: string; n?: number; accent?: boolean; accent3d?: boolean }) {
+function CatChip({ on, onClick, label, n, accent, accent3d, disabled, title, nWidth }: { on: boolean; onClick: () => void; label: string; n?: number; accent?: boolean; accent3d?: boolean; disabled?: boolean; title?: string; nWidth?: string }) {
   return (
     <button
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs transition-colors ${on ? 'bg-fg text-bg' : accent ? 'bg-mot-soft text-mot hover:brightness-110' : accent3d ? 'bg-vis-soft text-vis hover:brightness-110' : 'bg-panel-2 text-fg-2 hover:text-fg'}`}
+      disabled={disabled}
+      title={title}
+      className={`shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-xs transition-colors disabled:opacity-40 ${on ? 'bg-fg text-bg' : accent ? 'bg-mot-soft text-mot hover:brightness-110' : accent3d ? 'bg-vis-soft text-vis hover:brightness-110' : 'bg-panel-2 text-fg-2 hover:text-fg'}`}
     >
       {label}
-      {n !== undefined && <span className={`num ml-1 ${on ? 'opacity-60' : 'text-fg-3'}`}>{n}</span>}
+      {n !== undefined && <span className={`num ml-1 inline-block text-right ${on ? 'opacity-60' : 'text-fg-3'}`} style={nWidth ? { minWidth: nWidth } : undefined}>{n}</span>}
     </button>
   );
 }

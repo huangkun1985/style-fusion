@@ -8,11 +8,15 @@ import type { Palette, SubjectId, Tune } from '../engine/types';
 
 const num = (x: unknown, lo: number, hi: number, d: number) => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d);
 
-/** 混合裡的風格清單：只留下風格庫認得的 id、權重夾在 5%～150%，重複的只留第一個 */
-export function sanitizeSels(raw: unknown, lib: Record<string, unknown>): Sel[] {
+/** 每一類（圖像／動效）最多同時混合幾個風格；介面加入時、配方碼、本機存檔、專案檔都用同一個上限（審查 R-04） */
+export const MAX_PER_KIND = 6;
+
+/** 混合裡的風格清單：只留下風格庫認得的 id、權重夾在 5%～150%，重複的只留第一個，超過上限的截掉 */
+export function sanitizeSels(raw: unknown, lib: Record<string, unknown>, max = MAX_PER_KIND): Sel[] {
   if (!Array.isArray(raw)) return [];
   const out: Sel[] = [];
   for (const x of raw) {
+    if (out.length >= max) break;
     const id = (x as Sel | null)?.id;
     if (typeof id !== 'string' || !Object.hasOwn(lib, id) || out.some((o) => o.id === id)) continue;
     out.push({ id, w: num((x as Sel).w, 0.05, 1.5, 1) });
@@ -25,7 +29,9 @@ export function isSubjectId(x: unknown): x is SubjectId {
 }
 
 const PAL_KEYS: (keyof Palette)[] = ['bg', 'bg2', 'ink', 'light', 'card', 'p', 's', 'a', 'q', 'r'];
-const COLOR = /^(#[0-9a-fA-F]{3,8}|(rgb|hsl)a?\([^()]{1,60}\))$/;
+// 十六進位色碼只收 3、4、6、8 位（#rgb、#rgba、#rrggbb、#rrggbbaa）；#12345 這種長度不對的不收（審查 R-17）
+const COLOR = /^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|(rgb|hsl)a?\([^()]{1,60}\))$/;
+export const isColor = (x: unknown): x is string => typeof x === 'string' && COLOR.test(x.trim());
 
 /** 微調參數：範圍與介面上的滑桿一致；不認得的欄位丟掉 */
 export function sanitizeTune(raw: unknown): Tune {
@@ -34,7 +40,7 @@ export function sanitizeTune(raw: unknown): Tune {
   if (t.custom && typeof t.custom === 'object') {
     for (const k of PAL_KEYS) {
       const v = (t.custom as Record<string, unknown>)[k];
-      if (typeof v === 'string' && COLOR.test(v.trim())) custom[k] = v.trim();
+      if (isColor(v)) custom[k] = v.trim();
     }
   }
   return {

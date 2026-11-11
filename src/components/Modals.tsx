@@ -386,7 +386,7 @@ export function ShareModal() {
         <div>
           <SectionTitle right={<CopyButton size="xs" text={code} label="複製配方碼" />}>目前混合的配方碼</SectionTitle>
           <textarea id="share-code" readOnly value={code} rows={3} className="num w-full resize-none rounded-lg border border-line bg-panel-2 p-2 text-[11px] text-fg-2 outline-none" onFocus={(e) => e.target.select()} />
-          <p className="mt-1 text-xs text-fg-3">配方碼包含全部風格、權重、主體、微調參數與音樂（曲風、名曲、聲音方案、調性、速度）。貼給同事，或在「我的收藏」貼上即可還原；舊版配方碼沒有音樂，載入時會保留你目前的音樂。</p>
+          <p className="mt-1 text-xs text-fg-3">配方碼包含全部風格、權重、主體、微調參數與音樂（曲風、名曲、聲音方案、調性、速度）。貼給同事，或在「我的配方」貼上即可還原；舊版配方碼沒有音樂，載入時會保留你目前的音樂。</p>
         </div>
         {!inArtifact && !isFile && (
           <div>

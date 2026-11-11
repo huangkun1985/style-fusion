@@ -1,4 +1,4 @@
-// 風格圖鑑、案例配方、我的收藏
+// 風格圖鑑、案例配方、我的配方（1.x 叫「我的收藏」）
 import { Pencil, Play, Search, Trash, Upload } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { MCATS, VCATS } from '../data/categories';
@@ -187,8 +187,8 @@ export function SavedView() {
     <div className="scroll-y h-full">
       <div className="mx-auto flex max-w-[1500px] flex-col gap-5 px-4 py-5">
         <div className="max-w-2xl">
-          <h1 className="font-display text-2xl font-extrabold tracking-tight">我的收藏</h1>
-          <p className="mt-1 text-sm leading-relaxed text-fg-2">在混合器按「收藏」就會存到這裡（存在這個瀏覽器）。換電腦時，用配方碼帶走。</p>
+          <h1 className="font-display text-2xl font-extrabold tracking-tight">我的配方</h1>
+          <p className="mt-1 text-sm leading-relaxed text-fg-2">在專案選單按「存成我的配方」就會存到這裡。我的配方跟著專案存；換電腦時用「存成檔案」或配方碼帶走。</p>
         </div>
         <div className="flex max-w-2xl flex-col gap-2 rounded-xl border border-line bg-panel p-3">
           <label htmlFor="import-code" className="text-[13px] font-medium">
@@ -210,7 +210,7 @@ export function SavedView() {
           </div>
         </div>
         {saved.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-line-2 p-10 text-center text-sm text-fg-3">還沒有收藏。到混合器調出喜歡的組合後，按右上角「收藏」。</div>
+          <div className="rounded-xl border border-dashed border-line-2 p-10 text-center text-sm text-fg-3">還沒有配方。調出喜歡的組合後，在頂列的專案選單按「存成我的配方」。</div>
         ) : (
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))' }}>
             {saved.map((s) => (
