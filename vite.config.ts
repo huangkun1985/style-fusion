@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { readFileSync } from 'node:fs';
+import { agentBridge } from './scripts/agent-bridge';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
@@ -87,7 +88,8 @@ function webExtras(): Plugin {
 // - npm run build:web  → dist-web/：線上版（Cloudflare 等靜態主機）。程式拆檔、取樣與 3D 用到才下載、可離線、可安裝
 export default defineConfig(({ command, mode }) => {
   const web = mode === 'web';
-  const plugins: PluginOption[] = [react(), tailwindcss()];
+  // agentBridge 只在開發與預覽伺服器上作用（start-dev.bat／start.bat），不影響建置結果
+  const plugins: PluginOption[] = [react(), tailwindcss(), agentBridge()];
   if (command === 'build' && !web) plugins.push(viteSingleFile());
   if (command === 'build' && web) plugins.push(webExtras());
   return {

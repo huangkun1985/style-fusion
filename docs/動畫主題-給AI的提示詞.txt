@@ -33,6 +33,7 @@
 
 圖層：
 - type（必填）：group（只當容器）、circle（r）、ellipse（rx, ry）、rect（w, h, radius）、polygon／blob（points：[x1,y1,x2,y2,…]，至少 3 個點）、line／curve（points，至少 2 個點；w 線寬）、arc（r, a0, a1 角度；w 線寬）、text（text, size, align, font）
+- text 的 font 只能是這幾個：sans（幾何無襯線）、grotesk（粗體怪誕體）、round（圓體）、serif（高對比襯線）、mono（等寬）、pixel（像素字）、term（終端機）、display（粗黑展示）、deco（裝飾藝術）、neon（霓虹線體）、script（手寫草體）、cond（窄體）、groovy（70 年代粗圓）、brush（宋體／書法感）；不寫就跟著圖像風格
 - id：名稱（選填，要被 shadowFor／track 參照時才需要，不能重複）
 - 顏色 fill／stroke：色板角色 bg、bg2、ink、light、card、p、s、a、q、r（會跟著圖像風格換色、使用者也能在「自訂色板」改色），可加明暗：a+20＝比點綴色亮 20%、a-15＝暗 15%（明暗範圍 1–99）；圖層的 fill／stroke 不要寫 #rrggbb（寫死的顏色使用者無法在「自訂色板」改，也不跟圖像風格換色），要特定顏色就用 palette 宣告；fill 設 null＝只描邊；stroke 設 false＝不描邊
 - palette：主題自帶的色板，{ "a": "#FFD43B", "r": "#FF9F1C" }（角色 → #rrggbb）。這些角色固定用你指定的顏色（不跟圖像風格換），使用者仍可在「自訂色板」改掉。用來定義主角的身份色，例如黃色鴨子：palette 的 a 設成鴨子黃，身體寫 fill "a"、翅膀 "a-8"、肚皮 "a+25"，嘴與腳用 palette 的 r 加明暗

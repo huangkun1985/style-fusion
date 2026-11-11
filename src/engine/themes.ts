@@ -664,6 +664,8 @@ export const themes = {
   list: (): ThemeInfo[] => items.map((x) => ({ id: x.id, theme: x.theme })),
   current: (): Theme | null => items.find((x) => x.id === currentId)?.theme ?? null,
   currentId: () => currentId,
+  /** 目前主題的原始 JSON（專案存檔、復原歷史、給 Agent 修改用） */
+  currentJson: (): string | null => items.find((x) => x.id === currentId)?.json ?? null,
   has: () => items.length > 0,
   rev: () => rev,
   /** 匯入並設為目前的主題；失敗會丟出帶有說明的錯誤。同名的會被取代。 */

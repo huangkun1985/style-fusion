@@ -12,7 +12,8 @@ import { setSubjectVersion } from '../engine/subjects';
 import { thumbs } from '../engine/thumbs';
 import { saveBlob, safeStorage } from '../lib/platform';
 import { resetHistory } from './history';
-import { makeProject, newId, sanitizeAgent, sanitizeMix, sanitizeProject, sanitizeRecipes, sceneKindOf, sceneMusicOf, type Project, type SceneMix } from './project';
+import { themes } from '../engine/themes';
+import { makeProject, MAX_CHAT, newId, sanitizeAgent, sanitizeMix, sanitizeProject, sanitizeRecipes, sceneKindOf, sceneMusicOf, type Project, type SceneMix } from './project';
 import { useStore, type RightTab, type UiMode } from './store';
 
 const DB_NAME = 'style-fusion';
@@ -140,6 +141,8 @@ interface Prefs {
   welcomed: boolean;
   locked: string[];
   sound: Pick<AudioPrefs, 'bgm' | 'sfx' | 'bgmVol' | 'sfxVol'>;
+  agentEffort: 'low' | 'high';
+  agentConsent: boolean;
 }
 
 const pick = <T extends string>(x: unknown, ok: readonly T[], d: T): T => (typeof x === 'string' && (ok as readonly string[]).includes(x) ? (x as T) : d);
@@ -164,6 +167,8 @@ export function sanitizePrefs(raw: unknown): Prefs {
     welcomed: bool(o.welcomed, false),
     locked: Array.isArray(o.locked) ? o.locked.filter((k): k is string => typeof k === 'string' && LOCK.test(k)).slice(0, 20) : [],
     sound: { bgm: snd.bgm, sfx: snd.sfx, bgmVol: snd.bgmVol, sfxVol: snd.sfxVol },
+    agentEffort: o.agentEffort === 'high' ? 'high' : 'low',
+    agentConsent: bool(o.agentConsent, false),
   };
 }
 
@@ -184,6 +189,8 @@ function prefsOf(): Prefs {
     welcomed: s.welcomed,
     locked: s.locked,
     sound: { bgm: s.audio.bgm, sfx: s.audio.sfx, bgmVol: s.audio.bgmVol, sfxVol: s.audio.sfxVol },
+    agentEffort: s.agentEffort,
+    agentConsent: s.agentConsent,
   };
 }
 
@@ -204,7 +211,12 @@ export function liveMix(): SceneMix {
 export function currentProject(): Project {
   const s = useStore.getState();
   const mix = liveMix();
-  const scenes = s.scenes.map((sc) => (sc.id === s.activeScene ? { ...sc, mix, kind: sceneKindOf(mix.subject) } : sc));
+  const theme = mix.subject === 'custom' ? themes.currentJson() : null;
+  const scenes = s.scenes.map((sc) => {
+    if (sc.id !== s.activeScene) return sc;
+    const { theme: _t, chat: _c, ...rest } = sc;
+    return { ...rest, mix, kind: sceneKindOf(mix.subject), ...(theme ? { theme } : {}), ...(s.chat.length ? { chat: s.chat.slice(-MAX_CHAT) } : {}) };
+  });
   return {
     format: 'style-fusion-project',
     version: 1,
@@ -224,6 +236,16 @@ export function currentProject(): Project {
 function loadIntoStore(p: Project) {
   const sc = p.scenes.find((x) => x.id === p.active) ?? p.scenes[0];
   const mx = sc.mix;
+  // 生成的內容跟著場景：放回自訂主題（同名的會被取代）；壞掉的就算了，主體退回角色跳躍
+  let subjectOk = mx.subject !== 'custom';
+  if (sc.theme) {
+    try {
+      if (sc.theme !== themes.currentJson()) themes.add(sc.theme);
+      subjectOk = true;
+    } catch {
+      /* 主題壞了 */
+    }
+  } else if (mx.subject === 'custom') subjectOk = themes.has();
   useStore.setState((s) => ({
     projectId: p.id,
     projectName: p.name,
@@ -235,10 +257,12 @@ function loadIntoStore(p: Project) {
     saved: p.recipes,
     v: mx.v,
     m: mx.m,
-    subject: mx.subject,
+    subject: subjectOk ? mx.subject : 'mascot',
     tune: mx.tune,
     aspect: mx.aspect,
     audio: sanitizeAudioPrefs({ ...s.audio, ...mx.music }),
+    chat: sc.chat ?? [],
+    stamps: [],
     saveState: 'saved',
     view: 'mixer',
   }));
@@ -327,7 +351,8 @@ let writing: Promise<void> = Promise.resolve();
 async function writeNow() {
   window.clearTimeout(timer);
   // 按住看 A 的時候畫面上是 A；不要把 A 存成專案
-  if (useStore.getState().hist.showingA) return;
+  const h = useStore.getState().hist;
+  if (h.showingA || h.previewing) return;
   const p = currentProject();
   writing = writing.then(async () => {
     try {
@@ -350,9 +375,9 @@ function startAutosave() {
   const offStore = useStore.subscribe((s, prev) => {
     const docChanged =
       s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.saved !== prev.saved ||
-      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes ||
+      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes || s.chat !== prev.chat || s.themeRev !== prev.themeRev ||
       (s.audio !== prev.audio && JSON.stringify(sceneMusicOf(s.audio)) !== JSON.stringify(sceneMusicOf(prev.audio)));
-    if (docChanged && !s.hist.showingA) {
+    if (docChanged && !s.hist.showingA && !s.hist.previewing) {
       if (s.saveState !== 'saving') useStore.setState({ saveState: 'saving' });
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void writeNow(), 600);
@@ -361,7 +386,7 @@ function startAutosave() {
       s.theme !== prev.theme || s.uiMode !== prev.uiMode || s.rightTab !== prev.rightTab || s.panelCollapsed !== prev.panelCollapsed || s.subjectVer !== prev.subjectVer ||
       s.thumbsAnimate !== prev.thumbsAnimate || s.motionOverride !== prev.motionOverride || s.onion !== prev.onion || s.path !== prev.path || s.quality !== prev.quality ||
       s.browserKind !== prev.browserKind || s.welcomed !== prev.welcomed || s.locked !== prev.locked || s.audio.bgm !== prev.audio.bgm || s.audio.sfx !== prev.audio.sfx ||
-      s.audio.bgmVol !== prev.audio.bgmVol || s.audio.sfxVol !== prev.audio.sfxVol;
+      s.audio.bgmVol !== prev.audio.bgmVol || s.audio.sfxVol !== prev.audio.sfxVol || s.agentEffort !== prev.agentEffort || s.agentConsent !== prev.agentConsent;
     if (prefsChanged) {
       window.clearTimeout(prefsTimer);
       prefsTimer = window.setTimeout(() => safeStorage.setItem(LS_PREFS, JSON.stringify(prefsOf())), 400);

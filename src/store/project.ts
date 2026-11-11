@@ -34,12 +34,35 @@ export interface SceneMix {
   aspect: Aspect;
 }
 
+/** 時間點：Agent 輸入框裡的 @03.2s 標籤 */
+export interface Stamp {
+  /** 循環內的秒數 */
+  t: number;
+  label: string;
+}
+
+/** Agent 對話的一則訊息 */
+export interface ChatMsg {
+  role: 'user' | 'agent' | 'note';
+  text: string;
+  at: number;
+  stamps?: Stamp[];
+  /** 這則回覆帶來的修改結果：applied 套用、discarded 放棄、pending 還沒決定 */
+  change?: 'applied' | 'discarded' | 'pending';
+  ms?: number;
+}
+export const MAX_CHAT = 60;
+
 export interface Scene {
   id: string;
   name: string;
-  /** template＝內建主體（只能換字、換風格）；generated＝Agent 或使用者匯入的動畫內容（α2 起可以對話修改） */
+  /** template＝內建主體（只能換字、換風格）；generated＝Agent 或使用者匯入的動畫內容（可以對話修改） */
   kind: 'template' | 'generated';
   mix: SceneMix;
+  /** 生成的內容（自訂主題檔的 JSON）；只有 generated 的場景有 */
+  theme?: string;
+  /** 和 Agent 的對話紀錄 */
+  chat?: ChatMsg[];
 }
 
 /** 我的配方（舊版叫「收藏」） */
@@ -128,6 +151,34 @@ export function sanitizeRecipes(raw: unknown): SavedMix[] {
   return out;
 }
 
+export function sanitizeStamps(raw: unknown): Stamp[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x) => x && typeof x === 'object' && typeof (x as Stamp).t === 'number' && Number.isFinite((x as Stamp).t))
+    .slice(0, 8)
+    .map((x) => ({ t: Math.max(0, Math.min(600, (x as Stamp).t)), label: typeof (x as Stamp).label === 'string' ? (x as Stamp).label.slice(0, 40) : '' }));
+}
+
+export function sanitizeChat(raw: unknown): ChatMsg[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ChatMsg[] = [];
+  for (const x of raw.slice(-MAX_CHAT)) {
+    const o = obj(x);
+    if (o.role !== 'user' && o.role !== 'agent' && o.role !== 'note') continue;
+    if (typeof o.text !== 'string') continue;
+    const st = sanitizeStamps(o.stamps);
+    out.push({
+      role: o.role,
+      text: o.text.slice(0, 4000),
+      at: time(o.at, Date.now()),
+      ...(st.length ? { stamps: st } : {}),
+      ...(o.change === 'applied' || o.change === 'discarded' ? { change: o.change } : o.change === 'pending' ? { change: 'discarded' as const } : {}),
+      ...(typeof o.ms === 'number' && Number.isFinite(o.ms) ? { ms: o.ms } : {}),
+    });
+  }
+  return out;
+}
+
 export function sanitizeAgent(raw: unknown, fallbackTemplate: string): AgentDraft {
   const o = obj(raw);
   const sec = typeof o.seconds === 'number' && Number.isFinite(o.seconds) ? Math.round(Math.min(30, Math.max(2, o.seconds))) : 8;
@@ -144,7 +195,9 @@ export function sanitizeProject(raw: unknown, fallbackTemplate: string): Project
     const mix = sanitizeMix(so.mix);
     let id = idOf(so.id);
     if (scenes.some((x) => x.id === id)) id = newId();
-    scenes.push({ id, name: str(so.name, `場景 ${scenes.length + 1}`, 40), kind: so.kind === 'generated' || so.kind === 'template' ? so.kind : sceneKindOf(mix.subject), mix });
+    const theme = typeof so.theme === 'string' && so.theme.length <= 400_000 ? so.theme : undefined;
+    const chat = sanitizeChat(so.chat);
+    scenes.push({ id, name: str(so.name, `場景 ${scenes.length + 1}`, 40), kind: so.kind === 'generated' || so.kind === 'template' ? so.kind : sceneKindOf(mix.subject), mix, ...(theme ? { theme } : {}), ...(chat.length ? { chat } : {}) });
     if (scenes.length >= MAX_SCENES) break;
   }
   if (!scenes.length) return null;

@@ -38,10 +38,10 @@ export function TopBar() {
       <ProjectMenu />
       <SaveStatus compact={!sm} />
       <div className="flex shrink-0 items-center">
-        <IconBtn label={`復原（Ctrl+Z）：回到上一步。改錯了、套錯配方、骰到不喜歡的都可以退回${hist.undo ? `；還可以退 ${hist.undo} 步` : '；目前沒有可以復原的'}`} disabled={!hist.undo} onClick={() => undo()} className="size-11 sm:size-8">
+        <IconBtn label={`復原（Ctrl+Z）：回到上一步。改錯了、套錯配方、骰到不喜歡的都可以退回${hist.undo ? `；還可以退 ${hist.undo} 步` : '；目前沒有可以復原的'}`} disabled={!hist.undo || hist.previewing} onClick={() => undo()} className="size-11 sm:size-8">
           <Undo2 size={16} />
         </IconBtn>
-        <IconBtn label={`重做（Ctrl+Shift+Z）：把剛剛復原的再做一次${hist.redo ? '' : '；目前沒有可以重做的'}`} disabled={!hist.redo} onClick={() => redo()} className="size-11 sm:size-8">
+        <IconBtn label={`重做（Ctrl+Shift+Z）：把剛剛復原的再做一次${hist.redo ? '' : '；目前沒有可以重做的'}`} disabled={!hist.redo || hist.previewing} onClick={() => redo()} className="size-11 sm:size-8">
           <Redo2 size={16} />
         </IconBtn>
       </div>

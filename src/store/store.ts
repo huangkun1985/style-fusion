@@ -18,7 +18,7 @@ import { is3D, type SubjectId, type Tune } from '../engine/types';
 import { isSubjectId, MAX_PER_KIND, sanitizeSels, sanitizeTune } from './sanitize';
 import { cleanMusic, decodeMix, musicOf, type MusicPrefs } from './share';
 
-import type { AgentDraft, Aspect, SavedMix, Scene } from './project';
+import type { AgentDraft, Aspect, ChatMsg, SavedMix, Scene, Stamp } from './project';
 
 export type { Aspect, SavedMix } from './project';
 export type View = 'mixer' | 'library' | 'recipes' | 'saved';
@@ -84,7 +84,7 @@ interface State {
   /** 存在哪裡：IndexedDB、localStorage（IndexedDB 不能用時）、只在記憶體（兩者都不能用） */
   storage: 'idb' | 'local' | 'memory';
   /** 復原／重做與 A／B 的狀態（history.ts 維護，介面用來決定按鈕能不能按） */
-  hist: { undo: number; redo: number; a: boolean; showingA: boolean };
+  hist: { undo: number; redo: number; a: boolean; showingA: boolean; previewing: boolean; comparing: boolean };
   uiMode: UiMode;
   rightTab: RightTab;
   /** Agent 面板收成 48 px 的窄條 */
@@ -92,6 +92,14 @@ interface State {
   /** 起點選擇器的用途：start＝套整組配方；agent＝替 Agent 選風格模板（只換風格，不換主體） */
   starterFor: 'start' | 'agent';
   setAgent: (p: Partial<AgentDraft>) => void;
+  /** 目前場景的 Agent 對話（存檔時寫回場景） */
+  chat: ChatMsg[];
+  /** 輸入框上的時間點標籤（不存檔） */
+  stamps: Stamp[];
+  /** 思考深度：快（low）／仔細（high）；偏好 */
+  agentEffort: 'low' | 'high';
+  /** 使用者看過「內容會送到你的 Claude 帳號」的說明；偏好 */
+  agentConsent: boolean;
 
   set: (p: Partial<State>) => void;
   toggle: (kind: Kind, id: string) => void;
@@ -224,12 +232,16 @@ export const useStore = create<State>()((set, get) => ({
       agent: { template: FIRST.id, topic: '', seconds: 8 },
       saveState: 'saved',
       storage: 'memory',
-      hist: { undo: 0, redo: 0, a: false, showingA: false },
+      hist: { undo: 0, redo: 0, a: false, showingA: false, previewing: false, comparing: false },
       uiMode: 'simple',
       rightTab: 'agent',
       panelCollapsed: false,
       starterFor: 'start',
       setAgent: (p) => set({ agent: { ...get().agent, ...p } }),
+      chat: [],
+      stamps: [],
+      agentEffort: 'low',
+      agentConsent: false,
 
       set: (p) => set(p),
       toggle: (kind, id) => {

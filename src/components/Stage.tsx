@@ -9,6 +9,7 @@ import { themes } from '../engine/themes';
 import { runExport } from '../lib/exporter';
 import { saveBlob, stamp } from '../lib/platform';
 import { toggleSound } from '../lib/sound';
+import { addStampNow } from '../agent/session';
 import { useLookMove } from '../store/hooks';
 import { useStore, type Aspect } from '../store/store';
 import { SUBJECT_ICON } from './icons';
@@ -33,6 +34,8 @@ function gridSubjects(current: SubjectId): SubjectId[] {
 /** compact：手機用，舞台矮一點（36vh），讓下面的 Agent 有空間；外層會把舞台與播放列貼在頂端 */
 export function Stage({ fill = false, simple = false, compact = false }: { fill?: boolean; simple?: boolean; compact?: boolean }) {
   const showingA = useStore((s) => s.hist.showingA);
+  const previewing = useStore((s) => s.hist.previewing);
+  const comparing = useStore((s) => s.hist.comparing);
   const { look, move, tune, v, m } = useLookMove();
   const subject = useStore((s) => s.subject);
   const aspect = useStore((s) => s.aspect);
@@ -259,6 +262,11 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
               <span className="text-xs opacity-80">已依系統「減少動態效果」設定，預設暫停</span>
             </button>
           )}
+          {previewing && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-black/60 pl-3 text-[12px] leading-5 text-white">
+              {comparing ? '這是原本的（放開回到 Agent 的結果）' : '正在預覽 Agent 的結果，還沒套用。按住「比較」可以看原本的。'}
+            </div>
+          )}
           {showingA && <div className="pointer-events-none absolute left-2 top-2 rounded-md border border-mot bg-black/70 px-2 py-0.5 text-[12px] font-semibold text-white">A（放開滑鼠回到現在的 B）</div>}
           {fs !== 'off' && <FsBar visible={ctl} onExit={() => void exitFs()} />}
           {!glOk && <div className="absolute left-2 bottom-2 rounded bg-danger/90 px-2 py-1 text-[11px] text-white">此瀏覽器不支援 WebGL2，後期特效已停用</div>}
@@ -481,6 +489,18 @@ function SimpleTransport() {
       <IconBtn label={soundOn ? '關閉聲音（M）。不想被音樂打擾時用' : '開啟聲音（M）：背景音樂＋音效。想聽這組風格配的音樂時用'} active={soundOn} onClick={() => void toggleSound()} className="size-9">
         {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
       </IconBtn>
+      <button
+        type="button"
+        className={`${btn} hidden w-[112px] sm:flex disabled:opacity-40`}
+        disabled={subject !== 'custom'}
+        title={subject === 'custom' ? '附上時間點：把播放頭現在的時間變成 Agent 輸入框裡的標籤。要指出「哪裡」要改時用' : '附上時間點：只有生成的內容（可以用對話修改的場景）才能用'}
+        onClick={() => {
+          addStampNow();
+          useStore.getState().set({ rightTab: 'agent', panelCollapsed: false });
+        }}
+      >
+        <span className="size-2 rotate-45 bg-mot" aria-hidden /> 附上時間點
+      </button>
       <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-line sm:block" aria-hidden />
       <button type="button" className={`${btn} hidden w-[76px] sm:flex`} title="風格：從 12 個起點與案例配方挑一組風格套上。想換整體感覺時用" onClick={() => set({ starterOpen: true, starterFor: 'start' })}>
         <LayoutGrid size={15} /> 風格
