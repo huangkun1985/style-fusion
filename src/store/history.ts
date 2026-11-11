@@ -28,13 +28,14 @@ interface Doc {
   scenes: Scene[];
   active: string;
   chat: ChatMsg[];
+  content: Record<string, string>;
 }
 
 const LIMIT = 100;
 const musicOfAudio = ({ on: _on, bgm: _b, sfx: _s, bgmVol: _bv, sfxVol: _sv, ...rest }: AudioPrefs): Music => rest;
 // 主題的 JSON 不在 store 裡：記住「上一次看到的」，算變動之前的樣子時用它
 let knownTheme: string | null = null;
-const docOf = (s: ReturnType<typeof useStore.getState>, theme: string | null = themes.currentJson()): Doc => ({ v: s.v, m: s.m, subject: s.subject, tune: s.tune, aspect: s.aspect, music: musicOfAudio(s.audio), theme, scenes: s.scenes, active: s.activeScene, chat: s.chat });
+const docOf = (s: ReturnType<typeof useStore.getState>, theme: string | null = themes.currentJson()): Doc => ({ v: s.v, m: s.m, subject: s.subject, tune: s.tune, aspect: s.aspect, music: musicOfAudio(s.audio), theme, scenes: s.scenes, active: s.activeScene, chat: s.chat, content: s.content });
 const paused = () => {
   const h = useStore.getState().hist;
   return h.showingA || h.previewing;
@@ -47,6 +48,8 @@ let redoStack: Doc[] = [];
 let base: Doc | null = null;
 let applying = false;
 let pointerDown = false;
+/** 打字之類的連續操作（從聚焦到離開輸入框）算一步：beginGesture／endGesture */
+let gesture = false;
 let commitQueued = false;
 let docA: Doc | null = null;
 let previewBase: Doc | null = null;
@@ -86,7 +89,7 @@ function apply(d: Doc) {
     /* 存的主題壞了：留著現在的 */
   }
   knownTheme = themes.currentJson();
-  useStore.setState((s) => ({ v: d.v, m: d.m, subject: d.subject, tune: d.tune, aspect: d.aspect, audio: sanitizeAudioPrefs({ ...s.audio, ...d.music }), scenes: d.scenes, activeScene: d.active, chat: d.active !== s.activeScene ? d.chat : s.chat }));
+  useStore.setState((s) => ({ v: d.v, m: d.m, subject: d.subject, tune: d.tune, aspect: d.aspect, audio: sanitizeAudioPrefs({ ...s.audio, ...d.music }), scenes: d.scenes, activeScene: d.active, chat: d.active !== s.activeScene ? d.chat : s.chat, content: d.content }));
   applying = false;
   snapAuditionToPlan();
 }
@@ -101,7 +104,7 @@ export function startHistory() {
     knownTheme = themes.currentJson();
     if (applying || s.hist.showingA) return;
     // 對話（chat）本身不算一步，但跟著文件一起記，換場景、復原時才對得上
-    const changed = s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.audio !== prev.audio || s.themeRev !== prev.themeRev || s.scenes !== prev.scenes || s.activeScene !== prev.activeScene;
+    const changed = s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.audio !== prev.audio || s.themeRev !== prev.themeRev || s.scenes !== prev.scenes || s.activeScene !== prev.activeScene || s.content !== prev.content;
     if (!changed) return;
     if (s.hist.previewing) {
       if (s.hist.comparing) return;
@@ -113,7 +116,7 @@ export function startHistory() {
     const before = docOf(prev, prevTheme);
     if (same(before, docOf(s))) return; // 只動了聲音開關、音量，或換了主體版本這類不算文件的東西
     if (!base) base = before;
-    if (!pointerDown && !commitQueued) {
+    if (!pointerDown && !gesture && !commitQueued) {
       commitQueued = true;
       queueMicrotask(commit);
     }
@@ -131,6 +134,15 @@ export function startHistory() {
   window.addEventListener('pointerup', up, true);
   window.addEventListener('pointercancel', up, true);
   window.addEventListener('blur', up);
+}
+
+export function beginGesture() {
+  commit();
+  gesture = true;
+}
+export function endGesture() {
+  gesture = false;
+  commit();
 }
 
 /** 換專案、開檔之後：歷史從頭開始（不能復原到別的專案） */

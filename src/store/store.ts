@@ -12,6 +12,7 @@ import { VISUAL, VISUAL_MAP } from '../data/visual';
 import { TUNE_DEFAULT } from '../engine/resolve';
 import { SUBJECT_ORDER } from '../engine/subjects';
 import { setSubjectVersion, type SubjectVer } from '../engine/subjects';
+import { setContent } from '../engine/content';
 import { thumbs } from '../engine/thumbs';
 import { themes } from '../engine/themes';
 import { is3D, type SubjectId, type Tune } from '../engine/types';
@@ -105,6 +106,8 @@ interface State {
   wall: boolean;
   wallFilter: WallFilter;
   wallBatch: number;
+  /** 目前場景的模板內容欄位（α3 F9）；鍵是「主體.欄位」，只放改過的 */
+  content: Record<string, string>;
 
   set: (p: Partial<State>) => void;
   toggle: (kind: Kind, id: string) => void;
@@ -250,6 +253,7 @@ export const useStore = create<State>()((set, get) => ({
       wall: false,
       wallFilter: 'all',
       wallBatch: 1,
+      content: {},
 
       set: (p) => set(p),
       toggle: (kind, id) => {
@@ -398,3 +402,11 @@ export const useStore = create<State>()((set, get) => ({
 
 // 主題匯入、切換、刪除時，讓所有用到循環秒數與主體名稱的地方重算
 themes.onChange(() => useStore.setState((s) => ({ themeRev: s.themeRev + 1 })));
+
+// 模板的內容欄位改了（打字、換場景、復原）：同步到繪圖端，縮圖重畫
+useStore.subscribe((s, prev) => {
+  if (s.content !== prev.content) {
+    setContent(s.content);
+    thumbs.invalidate();
+  }
+});

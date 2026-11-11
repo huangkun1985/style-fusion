@@ -5,6 +5,7 @@
 import type { Cue } from '../../../audio/types';
 import { darken, luma, mix } from '../../color';
 import { TAU, clamp, hash, lerp, wrap } from '../../util';
+import { content } from '../../content';
 import type { Subject } from '../types';
 
 const WORD = 'MOTION';
@@ -73,9 +74,13 @@ export const type2: Subject = {
       S.text(str, x, y, size, c, { flat: true, shadow: false, stroke: false, font: 'mono', alpha: o.a ?? 1, align: al });
     };
 
-    const widths = WORD.split('').map((c) => S.measure(c, SIZE, 'grotesk'));
+    // 內容欄位（2.0 α3）：沒改過就是預設的 MOTION／動效風格／跑馬燈，畫面和以前一樣
+    const word = Array.from(content('type', 'word', WORD));
+    const subText = content('type', 'sub', SUB);
+    const marquee = content('type', 'marquee', MARQUEE);
+    const widths = word.map((c) => S.measure(c, SIZE, 'grotesk'));
     const gap = -6; // 字距收緊（參考圖的字幾乎貼在一起）
-    const total = widths.reduce((s, w) => s + w, 0) + gap * (WORD.length - 1);
+    const total = widths.reduce((s, w) => s + w, 0) + gap * (word.length - 1);
     const fit = Math.min(1, (env.Wu * 0.82) / (total + 40));
     let x = -total / 2;
     const xs: number[] = [];
@@ -108,14 +113,14 @@ export const type2: Subject = {
     S.scale(fit);
     let lastVisible = -1;
     const cy = -8; // 字的視覺中心
-    for (let i = 0; i < WORD.length; i++) {
+    for (let i = 0; i < word.length; i++) {
       const st = M.stag(i) * 1.5;
       let p: number;
       let out: number;
       let alpha = 1;
       if (tw) {
         p = u > 0.06 + i * 0.055 ? 1 : 0;
-        out = u > 0.8 + (WORD.length - 1 - i) * 0.025 ? 1 : 0;
+        out = u > 0.8 + (word.length - 1 - i) * 0.025 ? 1 : 0;
         alpha = p * (1 - out);
         if (alpha > 0) lastVisible = i;
       } else {
@@ -141,7 +146,7 @@ export const type2: Subject = {
       const sc = tw ? 1 : lerp(0.55, 1, clamp(p));
       S.scale((1 + sq + beat) * sc, (1 - sq * 0.8 + beat) * sc);
       S.skew(SKEW);
-      let ch = WORD[i];
+      let ch = word[i];
       const settle = 0.3 + i * 0.035;
       if (scr > 0.25 && u < settle) ch = GLYPHS[Math.floor(hash(Math.floor(M.tReal * 15), i, 3) * GLYPHS.length)];
       const opt = { font: 'grotesk' as const, flat: true, shadow: false, stroke: false as const, glow: false, drawOn: false };
@@ -180,7 +185,7 @@ export const type2: Subject = {
       S.push();
       S.translate(-half, 96 + (1 - sp) * 24 - so * 16);
       S.jitter(19);
-      S.text(SUB, 0, 0, subSize, 'ink', { align: 'left', font: fnt, flat: true, shadow: false });
+      S.text(subText, 0, 0, subSize, 'ink', { align: 'left', font: fnt, flat: true, shadow: false });
       S.pop();
       if (narrow) {
         const ty = 96 + subSize * 0.62 + 16 + (1 - sp) * 18;
@@ -201,12 +206,12 @@ export const type2: Subject = {
       S.rect(0, by, env.Wu + 40, 24, 0, 'ink', { shadow: false, stroke: false, flat: true, drawOn: false });
       if (det > 0.35) {
         S.alpha = baseA * (1 - mo) * clamp(mp * 1.5);
-        const unit = S.measure(MARQUEE, 11, 'mono');
+        const unit = S.measure(marquee, 11, 'mono');
         const n = Math.ceil(env.Wu / unit) + 2;
         const off = -u * unit * 1.0;
         for (let k = 0; k < n; k++) {
           const x0 = -env.Wu / 2 + k * unit + wrap(off, unit) - unit;
-          S.text(MARQUEE, x0, by + 0.5, 11, pal.bg, { align: 'left', flat: true, shadow: false, stroke: false, font: 'mono', drawOn: false });
+          S.text(marquee, x0, by + 0.5, 11, pal.bg, { align: 'left', flat: true, shadow: false, stroke: false, font: 'mono', drawOn: false });
         }
       }
     }

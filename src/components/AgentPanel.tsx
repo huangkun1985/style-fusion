@@ -10,7 +10,9 @@ import { SUBJECTS } from '../engine/subjects';
 import { themes } from '../engine/themes';
 import { agentPrompt, demoTopic, recipeById, templateLine } from '../lib/agentPrompt';
 import { copyText } from '../lib/platform';
-import { compareOriginal } from '../store/history';
+import { beginGesture, compareOriginal, endGesture } from '../store/history';
+import { fieldsFor } from '../engine/content';
+import type { SubjectId } from '../engine/types';
 import { mixSpec } from '../store/hooks';
 import { useStore } from '../store/store';
 import { Thumb } from './Thumb';
@@ -98,6 +100,8 @@ export function AgentPanel({ showStatus }: { showStatus?: boolean }) {
   const subject = useStore((s) => s.subject);
   const connected = bridge.state === 'ok';
   const generated = subject === 'custom';
+  const ver = useStore((s) => s.subjectVer);
+  const fields = fieldsFor(subject, ver);
   const [regen, setRegen] = useState(false);
   // 版面：上面是自己捲的內容；生成的場景另外有固定在面板底部的輸入框（設計圖的位置），修改卡出現、收起時輸入框不會動
   return (
@@ -136,8 +140,11 @@ export function AgentPanel({ showStatus }: { showStatus?: boolean }) {
         </>
       ) : (
         <>
-          <div className="rounded-lg border border-line-2 bg-panel-2 px-3 py-2 text-[12px] leading-[18px] text-fg-2">
-            「{SUBJECTS[subject].name}」是內建模板，不能用對話修改；可以換風格、換動效。要可以用對話修改的版本，請在下面生成一個新的。
+          <div className="flex flex-col gap-2 rounded-lg border border-line-2 bg-panel-2 px-3 py-2 text-[12px] leading-[18px] text-fg-2">
+            <span>
+              「{SUBJECTS[subject].name}」是內建模板，不能用對話修改；{fields.length ? '可以直接改下面的字、' : '可以'}換風格、換動效。要可以用對話修改的版本，請在下面生成一個新的。
+            </span>
+            {fields.length > 0 && <TemplateContent subject={subject} />}
           </div>
           <GenerateForm connected={connected} />
           <RunStatus />
@@ -539,6 +546,44 @@ function ChatInput({ connected }: { connected: boolean }) {
           <ManualBox prompt="" kind="modify" pasteOnly onDone={() => setPasteOpen(false)} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------- 內建模板的內容欄位（α3 F9） ----------
+function TemplateContent({ subject }: { subject: SubjectId }) {
+  const ver = useStore((s) => s.subjectVer);
+  const content = useStore((s) => s.content);
+  const fields = fieldsFor(subject, ver);
+  const setField = (key: string, value: string, def: string) => {
+    const k = `${subject}.${key}`;
+    const next = { ...useStore.getState().content };
+    if (!value.trim() || value === def) delete next[k];
+    else next[k] = value;
+    useStore.setState({ content: next });
+  };
+  return (
+    <div className="grid grid-cols-[56px_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5">
+      {fields.map((f) => {
+        const id = `content-${subject}-${f.key}`;
+        const v = content[`${subject}.${f.key}`] ?? '';
+        return (
+          <Fragment key={f.key}>
+            <label htmlFor={id} className="text-fg-2" title={f.tip}>{f.label}</label>
+            <input
+              id={id}
+              value={v}
+              placeholder={f.def}
+              maxLength={f.max * 2}
+              title={`${f.tip}。空著就用預設的「${f.def.trim()}」`}
+              onFocus={() => beginGesture()}
+              onBlur={() => endGesture()}
+              onChange={(e) => setField(f.key, Array.from(e.target.value).slice(0, f.max).join(''), f.def)}
+              className="h-8 min-w-0 rounded-md border border-line-2 bg-panel px-2 text-[13px] text-fg outline-none placeholder:text-fg-3 focus:border-mot"
+            />
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

@@ -36,6 +36,7 @@ function gridSubjects(current: SubjectId): SubjectId[] {
 export function Stage({ fill = false, simple = false, compact = false }: { fill?: boolean; simple?: boolean; compact?: boolean }) {
   const showingA = useStore((s) => s.hist.showingA);
   const previewing = useStore((s) => s.hist.previewing);
+  useStore((s) => s.content); // 模板的內容欄位改了：暫停中的畫面也要重畫
   const wallOpen = useStore((s) => s.wall);
   const comparing = useStore((s) => s.hist.comparing);
   const { look, move, tune, v, m } = useLookMove();

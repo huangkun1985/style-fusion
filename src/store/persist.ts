@@ -205,7 +205,7 @@ function applyPrefs(p: Prefs) {
 /** 從 store 的即時欄位組出目前場景的內容 */
 export function liveMix(): SceneMix {
   const s = useStore.getState();
-  return { v: s.v, m: s.m, subject: s.subject, tune: s.tune, music: sceneMusicOf(s.audio), aspect: s.aspect };
+  return { v: s.v, m: s.m, subject: s.subject, tune: s.tune, music: sceneMusicOf(s.audio), aspect: s.aspect, ...(Object.keys(s.content).length ? { content: s.content } : {}) };
 }
 
 /** 目前 store 裡的專案（目前場景換成即時內容） */
@@ -286,6 +286,7 @@ function loadIntoStore(p: Project) {
     audio: sanitizeAudioPrefs({ ...s.audio, ...mx.music }),
     chat: sc.chat ?? [],
     stamps: [],
+    content: mx.content ?? {},
     saveState: 'saved',
     view: 'mixer',
   }));
@@ -398,7 +399,7 @@ function startAutosave() {
   const offStore = useStore.subscribe((s, prev) => {
     const docChanged =
       s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.saved !== prev.saved ||
-      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes || s.chat !== prev.chat || s.themeRev !== prev.themeRev || s.midiRev !== prev.midiRev ||
+      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes || s.chat !== prev.chat || s.themeRev !== prev.themeRev || s.content !== prev.content || s.midiRev !== prev.midiRev ||
       (s.audio !== prev.audio && JSON.stringify(sceneMusicOf(s.audio)) !== JSON.stringify(sceneMusicOf(prev.audio)));
     if (docChanged && !s.hist.showingA && !s.hist.previewing) {
       if (s.saveState !== 'saving') useStore.setState({ saveState: 'saving' });

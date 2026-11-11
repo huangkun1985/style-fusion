@@ -14,6 +14,7 @@ const RB = 66; // 鏡筒外框半徑
 const N = 6;
 const OPEN = 22; // 張開時的孔徑
 const GAP = 40;
+import { content } from '../content';
 const WORD = 'LUMEN';
 const SIZE = 44;
 const TRACK = 12;
@@ -102,7 +103,7 @@ export const logo: Subject = {
     };
 
     // 版面
-    const charW = Array.from(WORD).map((c) => S.measure(c, SIZE));
+    const charW = Array.from(content('logo', 'word', WORD)).map((c) => S.measure(c, SIZE));
     const wordW = charW.reduce((a, b) => a + b, 0) + TRACK * (N - 2);
     const total = RB * 2 + GAP * 2 + wordW;
     const markX = -total / 2 + RB;
@@ -201,7 +202,7 @@ export const logo: Subject = {
       const pix = cell > 1.2 && SIZE * K < cell * 10;
       clip([[divX + 4, top, divX + 4 + GAP + wordW + 40, top, divX + 4 + GAP + wordW + 40, base, divX + 4, base]], () => {
         let x = wordX;
-        Array.from(WORD).forEach((c, i) => {
+        Array.from(content('logo', 'word', WORD)).forEach((c, i) => {
           const pin = M.tw(0.5 + i * 0.022 + M.stag(i), 0.62 + i * 0.022 + M.stag(i), 'o');
           const pout = M.tw(0.76 + i * 0.01, 0.82 + i * 0.01, 'i');
           const dy = (1 - pin) * SIZE * 1.3 + pout * SIZE * 1.3;

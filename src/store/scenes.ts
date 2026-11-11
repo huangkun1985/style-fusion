@@ -17,7 +17,7 @@ type St = ReturnType<typeof useStore.getState>;
 
 /** 目前場景的即時內容寫回場景清單 */
 export function stashActive(s: St = useStore.getState()): Scene[] {
-  const mix = { v: s.v, m: s.m, subject: s.subject, tune: s.tune, music: sceneMusicOf(s.audio), aspect: s.aspect };
+  const mix = { v: s.v, m: s.m, subject: s.subject, tune: s.tune, music: sceneMusicOf(s.audio), aspect: s.aspect, ...(Object.keys(s.content).length ? { content: s.content } : {}) };
   const theme = s.subject === 'custom' ? themes.currentJson() : null;
   return s.scenes.map((sc) => {
     if (sc.id !== s.activeScene) return sc;
@@ -46,6 +46,7 @@ function patchFor(sc: Scene, s: St) {
     audio: sanitizeAudioPrefs({ ...s.audio, ...sc.mix.music }),
     chat: sc.chat ?? [],
     stamps: [],
+    content: sc.mix.content ?? {},
   };
 }
 

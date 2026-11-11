@@ -7,6 +7,7 @@ import { MOTION_MAP } from '../data/motion';
 import type { Sel } from '../data/schema';
 import { VISUAL_MAP } from '../data/visual';
 import type { SubjectId, Tune } from '../engine/types';
+import { sanitizeContent } from '../engine/content';
 import { isSubjectId, sanitizeSels, sanitizeTune } from './sanitize';
 import { cleanMusic, type MusicPrefs } from './share';
 
@@ -32,6 +33,8 @@ export interface SceneMix {
   tune: Tune;
   music: SceneMusic;
   aspect: Aspect;
+  /** 內建模板的內容欄位（α3）：鍵是「主體.欄位」，只存改過的 */
+  content?: Record<string, string>;
 }
 
 /** 時間點：Agent 輸入框裡的 @03.2s 標籤 */
@@ -124,6 +127,7 @@ export function sanitizeMix(raw: unknown, fallbackSubject: SubjectId = 'mascot')
     tune: sanitizeTune(o.tune),
     music: sceneMusicOf(a),
     aspect: isAspect(o.aspect) ? o.aspect : 'fit',
+    ...(Object.keys(sanitizeContent(o.content)).length ? { content: sanitizeContent(o.content) } : {}),
   };
 }
 
