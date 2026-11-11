@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { clock } from '../engine/clock';
 import { themes } from '../engine/themes';
-import { beginPreview, commitPreview, discardPreview } from '../store/history';
+import { beginPreview, commitPreview, discardPreview, onPreviewEnd } from '../store/history';
 import type { ChatMsg, Stamp } from '../store/project';
 import { recipeById } from '../lib/agentPrompt';
 import { useStore } from '../store/store';
@@ -45,10 +45,7 @@ const markLastPending = (change: 'applied' | 'discarded') => {
 /** 把一份結果放上舞台預覽並做成修改卡（生成、修改、手動貼回都走這裡） */
 export function previewResult(r: Pick<AgentResult, 'json' | 'theme' | 'summary' | 'note' | 'ms' | 'retried'>, kind: 'generate' | 'modify') {
   const before = useStore.getState().subject === 'custom' ? themes.currentJson() : null;
-  if (useStore.getState().hist.previewing) {
-    discardPreview();
-    markLastPending('discarded');
-  }
+  if (useStore.getState().hist.previewing) discardPreview();
   // 生成的內容綁定它的風格模板：換成模板的風格與動效（放棄時一起還原）
   const tpl = kind === 'generate' ? recipeById(useStore.getState().agent.template) : null;
   beginPreview(r.json, tpl ? { v: tpl.v.map(([id, w]) => ({ id, w })), m: tpl.m.map(([id, w]) => ({ id, w })) } : {});
@@ -90,6 +87,7 @@ async function runIt(kind: 'generate' | 'modify', text = '', stamps: Stamp[] = [
 
 export function startGenerate() {
   const { agent } = useStore.getState();
+  if (!useStore.getState().agentConsent) useStore.setState({ agentConsent: true });
   pushChat({ role: 'user', text: `生成：${agent.topic.trim() || '（模板的示範主題）'}　${agent.seconds} 秒` });
   void runIt('generate');
 }
@@ -124,15 +122,17 @@ export function cancelRun() {
 
 export function acceptChange() {
   commitPreview();
-  markLastPending('applied');
-  useAgentRun.setState({ pending: null });
 }
 
 export function rejectChange() {
   discardPreview();
-  markLastPending('discarded');
-  useAgentRun.setState({ pending: null });
 }
+
+// 預覽怎麼結束的（按套用、按放棄、或預覽中改了別的＝套用）都從這裡更新對話與修改卡
+onPreviewEnd((how) => {
+  markLastPending(how);
+  useAgentRun.setState({ pending: null });
+});
 
 /** 把目前播放頭的時間變成輸入框上的標籤 */
 export function addStampNow() {

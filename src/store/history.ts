@@ -46,6 +46,11 @@ let pointerDown = false;
 let commitQueued = false;
 let docA: Doc | null = null;
 let previewBase: Doc | null = null;
+/** 預覽結束時通知（session 用來更新對話與修改卡）：applied 套用（含「繼續改別的＝套用」）、discarded 放棄 */
+let previewEnd: ((how: 'applied' | 'discarded') => void) | null = null;
+export const onPreviewEnd = (f: (how: 'applied' | 'discarded') => void) => {
+  previewEnd = f;
+};
 let previewDoc: Doc | null = null;
 let docB: Doc | null = null;
 let started = false;
@@ -90,9 +95,16 @@ export function startHistory() {
   useStore.subscribe((s, prev) => {
     const prevTheme = knownTheme;
     knownTheme = themes.currentJson();
-    if (applying || s.hist.showingA || s.hist.previewing) return;
+    if (applying || s.hist.showingA) return;
     const changed = s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.audio !== prev.audio || s.themeRev !== prev.themeRev;
     if (!changed) return;
+    if (s.hist.previewing) {
+      if (s.hist.comparing) return;
+      // 預覽中改了別的東西（換風格、重抽、拖滑桿…）：等於接受這次的結果。預覽變成一步，接下來的改動照常記錄
+      const before0 = docOf(prev, prevTheme);
+      if (same(before0, docOf(s))) return;
+      commitPreview();
+    }
     const before = docOf(prev, prevTheme);
     if (same(before, docOf(s))) return; // 只動了聲音開關、音量，或換了主體版本這類不算文件的東西
     if (!base) base = before;
@@ -215,6 +227,7 @@ export function commitPreview() {
   previewBase = previewDoc = null;
   useStore.setState({ hist: { ...useStore.getState().hist, previewing: false, comparing: false }, themeRev: useStore.getState().themeRev + 1 });
   publish();
+  previewEnd?.('applied');
 }
 
 /** 放棄：回到修改之前 */
@@ -225,6 +238,7 @@ export function discardPreview() {
   previewBase = previewDoc = null;
   apply(base);
   useStore.setState({ hist: { ...useStore.getState().hist, previewing: false, comparing: false } });
+  previewEnd?.('discarded');
 }
 
 /** 按住「比較」：暫時看修改之前的，放開回到修改後的 */

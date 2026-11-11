@@ -1,7 +1,10 @@
 # Style Fusion 交接文件（Hand over）
 
 > 寫給**在新的 session 接手這個專案的人（或新的 Claude）**。
-> ## 🆕 2026-11-11：2.0 α1 清爽地基完成（v2.0.0-alpha.1，**未提交**）
+> ## 🆕 2026-11-12：2.0 α2 Agent 完成（v2.0.0-alpha.2，已提交並推送）
+> **新 session 先讀 `docs/交接-2.0-alpha2後.md`，下一階段用 `docs/下個session的提示詞-2.0-α3.md`。** 驗收：`docs/驗收報告-v2.0.0-alpha.2.md`。Agent 的架構見第 6.8 節。
+>
+> ## 2026-11-11：2.0 α1 清爽地基完成（v2.0.0-alpha.1，已提交 5c37090）
 > **新 session 先讀 `docs/交接-2.0-alpha1後.md`，下一階段用 `docs/下個session的提示詞-2.0-α2.md`。** 設計：`docs/2.0設計提案.md`；驗收：`docs/驗收報告-v2.0.0-alpha.1.md`。
 > 還原點 `c15c4eb`（2.0 開工前，已推送）。α1 的改動等使用者說「提交」才 commit。
 > 2.0 的儲存與版式見本文件第 6.7 節；下面 1.x 時代的說明（`style-fusion-v1`、TopBar 分頁）已被取代，保留作歷史。
@@ -209,6 +212,13 @@ v1 檔案**不要改**（使用者要比較新舊）；改設計請改 v2。新�
 - **復原**：`src/store/history.ts`。訂閱 store，文件＝風格、動效、主體、微調、比例、音樂（不含 on／bgm／sfx／音量）；按下指標到放開合成一步，其餘同一事件循環合成一步；`resetHistory()` 在換專案時呼叫。A／B：`markA`／`showA(true|false)`／`clearA`；看 A 時 `hist.showingA` 為真，歷史與自動儲存都暫停。
 - **版式**：store 的 `uiMode`（simple／advanced）、`rightTab`（agent／tune／sound／spec）、`panelCollapsed`；`App.tsx` 的 `MixerView` 依寬度與模式排版；新區塊在 `components/Workspace.tsx`（`SceneStrip`、`RightPanel`、`AgentPanel` 手動模式、`MobileBar`）；`Stage` 的 `simple`／`compact` 參數；`TopBar.tsx` 是專案選單、儲存狀態、復原、A／B、模式開關。Agent 的提示詞在 `lib/agentPrompt.ts`（每個主體的示範主題、`styleSpec()`、`extractThemeJson()`）。
 - **測試陷阱**：在 App 頁面裡清儲存再重新整理沒用——`pagehide` 會把記憶體裡的專案與偏好寫回去。要清乾淨：先開同源但不跑 App 的頁面（例如 `/package.json`），在那裡刪 IndexedDB 與 `sf-*`，再開 `/`。進階播放列的相機鈕會真的下載 PNG 到專案根目錄（內建瀏覽器的下載位置），自動點按測試要跳過或攔截。
+
+### 6.8 Agent（α2）
+- **橋接**：`scripts/agent-bridge.ts` 是 Vite 外掛，`configureServer`／`configurePreviewServer` 都掛，所以 `start.bat`（`vite preview`）與 `start-dev.bat`（`vite`）都有 `/__sf/agent/hello`（GET，發通行碼）與 `/__sf/agent/run`（POST，NDJSON 串流）。安全規則寫在檔頭。啟動的指令：`claude -p --output-format stream-json --verbose --include-partial-messages --tools "" --strict-mcp-config --no-session-persistence --effort low|high`，提示詞走標準輸入。
+- **網頁端**：`src/agent/bridge.ts`（連線、串流、錯誤碼）→ `agent.ts`（組提示詞、取出 JSON、`parseTheme` 驗證、不合格帶錯誤重問一次、`measureFrameMs`）→ `session.ts`（一次一個請求、結果 `previewResult` 放上舞台、修改卡狀態、時間點）。純函數在 `themeTools.ts`。
+- **預覽**：`history.beginPreview(json, patch)` 換上新主題但不算一步、不存檔（`hist.previewing`）；`commitPreview`＝一步、`discardPreview`＝還原、`compareOriginal(true|false)`＝按住看原本的；預覽中改了別的文件內容會自動 `commitPreview`。結束時透過 `onPreviewEnd` 通知 `session.ts` 更新對話。
+- **資料**：場景的 `theme`（主題 JSON）與 `chat`（最多 60 則）跟著專案存；載入時把 `theme` 放回 `themes` 清單並設為目前的。復原歷史的文件多了 `theme`（目前主題的 JSON）。
+- **介面**：`components/AgentPanel.tsx`。內建模板的場景顯示生成表單；生成的場景顯示對話、修改卡，輸入框固定在面板底部。手動模式（連不上或 `?agent=manual`）同一套流程，「生成／送出」換成「複製提示詞／貼回」。
 
 ## 7. 常見工作怎麼做
 

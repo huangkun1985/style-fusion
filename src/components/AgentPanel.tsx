@@ -96,13 +96,13 @@ function StampChip({ t, label, onRemove }: { t: number; label: string; onRemove?
 export function AgentPanel({ showStatus }: { showStatus?: boolean }) {
   const bridge = useBridge();
   const subject = useStore((s) => s.subject);
-  const consent = useStore((s) => s.agentConsent);
-  const set = useStore((s) => s.set);
   const connected = bridge.state === 'ok';
   const generated = subject === 'custom';
   const [regen, setRegen] = useState(false);
+  // 版面：上面是自己捲的內容；生成的場景另外有固定在面板底部的輸入框（設計圖的位置），修改卡出現、收起時輸入框不會動
   return (
-    <div className="scroll-y gutter-stable relative -mr-1 flex min-h-0 flex-1 flex-col gap-3 pr-1 text-[13px]">
+    <div className="relative flex min-h-0 flex-1 flex-col gap-2 text-[13px]">
+    <div className="scroll-y gutter-stable relative -mr-1 flex min-h-0 flex-1 flex-col gap-3 pr-1">
       {showStatus && <AgentStatus />}
       {(bridge.state === 'none' || bridge.state === 'not-installed' || bridge.state === 'not-logged-in') && (
         <div className="flex items-start gap-2 rounded-lg bg-panel-2 px-3 py-2 text-[12px] leading-[18px] text-fg-2">
@@ -120,15 +120,8 @@ export function AgentPanel({ showStatus }: { showStatus?: boolean }) {
           )}
         </div>
       )}
-      {connected && !consent && (
-        <div className="flex items-start gap-2 rounded-lg border border-line-2 px-3 py-2 text-[12px] leading-[18px] text-fg-2">
-          <span className="flex-1">提示詞與動畫內容會送到你自己的 Claude 帳號（這台電腦登入的 Claude Code），並使用你的用量。App 不會上傳到其他地方。</span>
-          <Button size="xs" variant="soft" onClick={() => set({ agentConsent: true })}>知道了</Button>
-        </div>
-      )}
       {generated ? (
         <>
-          <Chat connected={connected} />
           <details open={regen} onToggle={(e) => setRegen((e.target as HTMLDetailsElement).open)} className="rounded-lg border border-line">
             <summary className="flex h-9 cursor-pointer items-center px-2.5 text-[12px] text-fg-2 hover:text-fg" title="重新生成：換一個主題或風格模板，做一段新的動畫（目前的內容在復原歷史裡）">
               重新生成（換主題或風格模板）
@@ -137,6 +130,9 @@ export function AgentPanel({ showStatus }: { showStatus?: boolean }) {
               <GenerateForm connected={connected} />
             </div>
           </details>
+          <ChatLog />
+          <RunStatus />
+          <PendingCard />
         </>
       ) : (
         <>
@@ -148,6 +144,8 @@ export function AgentPanel({ showStatus }: { showStatus?: boolean }) {
           <PendingCard />
         </>
       )}
+    </div>
+    {generated && <ChatInput connected={connected} />}
     </div>
   );
 }
@@ -252,6 +250,11 @@ function GenerateForm({ connected }: { connected: boolean }) {
             生成
           </Button>
         ) : (
+          null
+        )}
+        {connected ? (
+          <span className="text-[12px] leading-[18px] text-fg-3">提示詞與動畫內容會送到你自己的 Claude 帳號（這台電腦登入的 Claude Code），並使用你的用量；App 不會上傳到其他地方。</span>
+        ) : (
           <ManualBox prompt={prompt} kind="generate" />
         )}
       </section>
@@ -260,8 +263,8 @@ function GenerateForm({ connected }: { connected: boolean }) {
 }
 
 // ---------- 手動模式：複製提示詞、貼回回答 ----------
-function ManualBox({ prompt, kind }: { prompt: string; kind: 'generate' | 'modify' }) {
-  const [pasteOpen, setPasteOpen] = useState(false);
+function ManualBox({ prompt, kind, pasteOnly, onDone }: { prompt: string; kind: 'generate' | 'modify'; pasteOnly?: boolean; onDone?: () => void }) {
+  const [pasteOpen, setPasteOpen] = useState(!!pasteOnly);
   const [paste, setPaste] = useState('');
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
@@ -270,13 +273,15 @@ function ManualBox({ prompt, kind }: { prompt: string; kind: 'generate' | 'modif
       previewResult(parseAnswer(paste), kind);
       setErr('');
       setPaste('');
-      setPasteOpen(false);
+      setPasteOpen(pasteOnly ? true : false);
+      onDone?.();
     } catch (e) {
       setErr(`格式不對：${(e as Error).message.split('\n')[0]}。請 AI 照提示詞的格式重新輸出。`);
     }
   };
   return (
     <div className="flex flex-col gap-2">
+      {!pasteOnly && (
       <Button
         variant="soft"
         className="w-full"
@@ -290,17 +295,23 @@ function ManualBox({ prompt, kind }: { prompt: string; kind: 'generate' | 'modif
         <Copy size={15} />
         <span className="inline-block w-[7em] text-left">{copied === 'ok' ? '已複製' : copied === 'fail' ? '請手動選取' : '複製提示詞'}</span>
       </Button>
+      )}
+      {!pasteOnly && (
       <Button variant="outline" className="w-full border-dashed" aria-expanded={pasteOpen} title="貼上 AI 的回答：把 AI 回覆的整段文字貼進來，App 會取出動畫檔、檢查格式、放上舞台預覽" onClick={() => setPasteOpen(!pasteOpen)}>
         <ClipboardPaste size={15} />
         <span className="inline-block w-[7em] text-left">貼上 AI 的回答</span>
       </Button>
+      )}
       {pasteOpen && (
         <div className="flex flex-col gap-2">
           <label htmlFor={`paste-${kind}`} className="sr-only">AI 的回答</label>
           <textarea id={`paste-${kind}`} rows={5} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="把 AI 的整段回答貼在這裡（裡面要有 ```json 區塊）" className="resize-y rounded-md border border-line-2 bg-panel-2 px-2 py-1.5 text-[12px] leading-[18px] outline-none focus:border-mot" />
-          <Button variant="soft" disabled={!paste.trim()} onClick={apply} title="放上舞台預覽：檢查格式後出現修改卡，按套用才算數">
-            放上舞台預覽
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="soft" className="flex-1" disabled={!paste.trim()} onClick={apply} title="放上舞台預覽：檢查格式後出現修改卡，按套用才算數">
+              放上舞台預覽
+            </Button>
+            {pasteOnly && <Button variant="ghost" onClick={() => onDone?.()}>取消</Button>}
+          </div>
         </div>
       )}
       <span className="min-h-[18px] text-[12px] leading-[18px] text-danger" role="alert">{err}</span>
@@ -415,15 +426,45 @@ function PendingCard() {
   );
 }
 
-// ---------- 對話（生成的場景） ----------
-function Chat({ connected }: { connected: boolean }) {
+// ---------- 對話（生成的場景）：紀錄在捲動區，輸入框固定在面板底部 ----------
+function ChatLog() {
+  const chat = useStore((s) => s.chat);
+  useStore((s) => s.themeRev);
+  const theme = themes.current();
+  return (
+    <section className="flex flex-col gap-2" aria-label="和 Agent 的對話">
+      {chat.length === 0 && (
+        <p className="rounded-lg bg-panel-2 px-3 py-2 text-[12px] leading-[18px] text-fg-2">
+          這是生成的內容{theme ? `「${theme.name}」` : ''}，可以用對話修改。播到不滿意的地方按「附上時間點」，再說要改什麼，例如「這裡煙太快，慢一半」。
+        </p>
+      )}
+      {chat.map((m, i) =>
+        m.role === 'user' ? (
+          <div key={i} className="flex max-w-[92%] flex-col gap-1 self-end rounded-[12px_12px_2px_12px] bg-raise px-3 py-2">
+            {m.stamps && <div className="flex flex-wrap gap-1">{m.stamps.map((s, j) => <StampChip key={j} t={s.t} label={s.label} />)}</div>}
+            <span className="whitespace-pre-wrap leading-5">{m.text}</span>
+          </div>
+        ) : m.role === 'agent' ? (
+          <div key={i} className="flex flex-col gap-1 text-fg">
+            <span className="leading-5"><Linkify text={m.text} /></span>
+            <span className="text-[12px] text-fg-3">{m.change === 'applied' ? '已套用' : m.change === 'discarded' ? '已放棄' : '還沒決定'}{m.ms ? `　${Math.round(m.ms / 1000)} 秒` : ''}</span>
+          </div>
+        ) : (
+          <span key={i} className="text-[12px] text-fg-3">{m.text}</span>
+        ),
+      )}
+    </section>
+  );
+}
+
+function ChatInput({ connected }: { connected: boolean }) {
   const chat = useStore((s) => s.chat);
   const stamps = useStore((s) => s.stamps);
   const running = useAgentRun((s) => s.running);
   const [text, setText] = useState('');
-  const theme = themes.current();
-  useStore((s) => s.themeRev);
   const [now, setNow] = useState(0);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   useEffect(() => {
     const id = window.setInterval(() => {
       const L = themes.current()?.loop ?? 1;
@@ -440,68 +481,64 @@ function Chat({ connected }: { connected: boolean }) {
   const manualPrompt = useMemo(() => (connected || !text.trim() ? '' : buildModifyPrompt(text.trim(), stamps, chat)), [connected, text, stamps, chat]);
   const removeStamp = (i: number) => useStore.setState({ stamps: stamps.filter((_, j) => j !== i) });
   return (
-    <>
-      <section className="flex flex-col gap-2" aria-label="和 Agent 的對話">
-        {chat.length === 0 && (
-          <p className="rounded-lg bg-panel-2 px-3 py-2 text-[12px] leading-[18px] text-fg-2">
-            這是生成的內容{theme ? `「${theme.name}」` : ''}，可以用對話修改。播到不滿意的地方按「附上時間點」，再說要改什麼，例如「這裡煙太快，慢一半」。
-          </p>
-        )}
-        {chat.map((m, i) =>
-          m.role === 'user' ? (
-            <div key={i} className="flex max-w-[92%] flex-col gap-1 self-end rounded-[12px_12px_2px_12px] bg-raise px-3 py-2">
-              {m.stamps && <div className="flex flex-wrap gap-1">{m.stamps.map((s, j) => <StampChip key={j} t={s.t} label={s.label} />)}</div>}
-              <span className="whitespace-pre-wrap leading-5">{m.text}</span>
-            </div>
-          ) : m.role === 'agent' ? (
-            <div key={i} className="flex flex-col gap-1 text-fg">
-              <span className="leading-5"><Linkify text={m.text} /></span>
-              <span className="text-[12px] text-fg-3">{m.change === 'applied' ? '已套用' : m.change === 'discarded' ? '已放棄' : '還沒決定'}{m.ms ? `　${Math.round(m.ms / 1000)} 秒` : ''}</span>
-            </div>
-          ) : (
-            <span key={i} className="text-[12px] text-fg-3">{m.text}</span>
-          ),
-        )}
-      </section>
-      <RunStatus />
-      <PendingCard />
-      <div className="sticky bottom-0 mt-auto flex flex-col gap-1.5 rounded-xl border border-line-2 bg-panel-2 p-2">
-        {stamps.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {stamps.map((s, i) => <StampChip key={i} t={s.t} label={s.label} onRemove={() => removeStamp(i)} />)}
-          </div>
-        )}
-        <label htmlFor="agent-say" className="sr-only">對 Agent 說</label>
-        <textarea
-          id="agent-say"
-          rows={2}
-          value={text}
-          maxLength={1000}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (connected && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          placeholder="說說這段動畫要改哪裡（Enter 送出，Shift+Enter 換行）"
-          className="resize-none bg-transparent px-1 py-0.5 leading-5 outline-none placeholder:text-fg-3"
-        />
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => addStampNow()} className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[12px] text-fg-2 hover:bg-raise hover:text-fg" title="附上時間點：把播放頭現在的時間變成一個標籤，Agent 會知道「這裡」指的是哪一刻">
-            <span className="size-[7px] rotate-45 bg-fg-2" aria-hidden />
-            附上目前時間 <span className="num inline-block w-[3.2em]">{fmt(now)}</span>
-          </button>
-          <span className="flex-1" />
-          {connected && (
-            <button type="button" aria-label="送出" title="送出：把修改意見與時間點送給 Agent（約 20～30 秒）" disabled={!text.trim() || !!running} onClick={send} className="flex h-8 w-9 items-center justify-center rounded-md bg-raise text-fg disabled:opacity-40">
-              <ArrowUp size={16} />
-            </button>
-          )}
-        </div>
-        {!connected && (text.trim() ? <ManualBox prompt={manualPrompt} kind="modify" /> : <span className="px-1 text-[12px] text-fg-3">手動模式：先寫下要改的地方，下面就會出現「複製提示詞」。</span>)}
+    <div className="flex shrink-0 flex-col gap-1.5 rounded-xl border border-line-2 bg-panel-2 p-2">
+      {/* 時間點那一列一直佔著位置（沒有時是一行說明），加標籤時輸入框不會長高 */}
+      <div className="scroll-x hide-scrollbar flex h-6 flex-nowrap gap-1">
+        {stamps.length ? stamps.map((s, i) => <StampChip key={i} t={s.t} label={s.label} onRemove={() => removeStamp(i)} />) : <span className="px-1 text-[12px] leading-6 text-fg-3">還沒有附時間點</span>}
       </div>
-    </>
+      <label htmlFor="agent-say" className="sr-only">對 Agent 說</label>
+      <textarea
+        id="agent-say"
+        rows={2}
+        value={text}
+        maxLength={1000}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (connected && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            send();
+          }
+        }}
+        placeholder={connected ? '說說這段動畫要改哪裡（Enter 送出，Shift+Enter 換行）' : '寫下要改的地方，再按「複製提示詞」貼給任何 AI'}
+        className="resize-none bg-transparent px-1 py-0.5 leading-5 outline-none placeholder:text-fg-3"
+      />
+      <div className="flex items-center gap-1.5">
+        <button type="button" onClick={() => addStampNow()} className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-[12px] text-fg-2 hover:bg-raise hover:text-fg" title="附上時間點：把播放頭現在的時間變成一個標籤，Agent 會知道「這裡」指的是哪一刻">
+          <span className="size-[7px] rotate-45 bg-fg-2" aria-hidden />
+          附上 <span className="num inline-block w-[3.2em]">{fmt(now)}</span>
+        </button>
+        <span className="flex-1" />
+        {connected ? (
+          <button type="button" aria-label="送出" title="送出：把修改意見與時間點送給 Agent（約 20～30 秒）" disabled={!text.trim() || !!running} onClick={send} className="flex h-8 w-9 items-center justify-center rounded-md bg-raise text-fg disabled:opacity-40">
+            <ArrowUp size={16} />
+          </button>
+        ) : (
+          <>
+            <Button
+              size="sm"
+              variant="soft"
+              disabled={!manualPrompt}
+              title="複製提示詞：整段（格式說明＋目前的動畫＋你的意見與時間點）複製起來，貼給任何 AI。先寫下要改的地方才能按"
+              onClick={async () => {
+                const ok = await copyText(manualPrompt);
+                setCopied(ok ? 'ok' : 'fail');
+                setTimeout(() => setCopied('idle'), 1600);
+              }}
+            >
+              <Copy size={14} /> <span className="inline-block w-[4.5em] text-left">{copied === 'ok' ? '已複製' : copied === 'fail' ? '手動選取' : '複製提示詞'}</span>
+            </Button>
+            <Button size="sm" variant="outline" aria-expanded={pasteOpen} title="貼回：把 AI 的整段回覆貼進來，檢查後放上舞台預覽" onClick={() => setPasteOpen(!pasteOpen)}>
+              <ClipboardPaste size={14} /> 貼回
+            </Button>
+          </>
+        )}
+      </div>
+      {pasteOpen && (
+        // 浮層蓋在對話上面，不推動版面
+        <div className="absolute inset-x-0 bottom-0 z-20 rounded-xl border border-line-2 bg-panel p-2 shadow-[var(--shadow)]">
+          <ManualBox prompt="" kind="modify" pasteOnly onDone={() => setPasteOpen(false)} />
+        </div>
+      )}
+    </div>
   );
 }
-

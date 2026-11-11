@@ -491,7 +491,8 @@ function SimpleTransport() {
       </IconBtn>
       <button
         type="button"
-        className={`${btn} hidden w-[112px] sm:flex disabled:opacity-40`}
+        aria-label="附上時間點"
+        className={`${btn} hidden w-9 sm:flex xl:w-[112px] disabled:opacity-40`}
         disabled={subject !== 'custom'}
         title={subject === 'custom' ? '附上時間點：把播放頭現在的時間變成 Agent 輸入框裡的標籤。要指出「哪裡」要改時用' : '附上時間點：只有生成的內容（可以用對話修改的場景）才能用'}
         onClick={() => {
@@ -499,7 +500,8 @@ function SimpleTransport() {
           useStore.getState().set({ rightTab: 'agent', panelCollapsed: false });
         }}
       >
-        <span className="size-2 rotate-45 bg-mot" aria-hidden /> 附上時間點
+        <span className="size-2 rotate-45 bg-mot" aria-hidden />
+        <span className="hidden xl:inline">附上時間點</span>
       </button>
       <span className="mx-0.5 hidden h-5 w-px shrink-0 bg-line sm:block" aria-hidden />
       <button type="button" className={`${btn} hidden w-[76px] sm:flex`} title="風格：從 12 個起點與案例配方挑一組風格套上。想換整體感覺時用" onClick={() => set({ starterOpen: true, starterFor: 'start' })}>
