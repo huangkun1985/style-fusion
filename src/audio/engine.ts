@@ -4,7 +4,7 @@ import type { Look, Move, SubjectId, Tune } from '../engine/types';
 import { subjectVersion } from '../engine/subjects';
 import { themes } from '../engine/themes';
 import { CueTracker, type SfxSource } from './cues';
-import { levelMatched, realSfx, realSfxRev } from './realSfx';
+import { levelMatched, realGainDb, realSfx, realSfxRev } from './realSfx';
 import type { Stereo } from './dsp';
 import { mixdown } from './mixdown';
 import type { AudioPlan } from './plan';
@@ -334,13 +334,31 @@ class AudioEngine {
     const key = real ? `real${realSfxRev()}|${pack}|${kind}` : `${pack}|${kind}|${variant}`;
     let b = this.sfxCache.get(key);
     if (!b) {
-      const data = real ? levelMatched(real, synthSfx(pack, kind, SAMPLE_RATE, 0), `${pack}|${kind}`) : synthSfx(pack, kind, SAMPLE_RATE, variant);
+      const data = real ? levelMatched(real, synthSfx(pack, kind, SAMPLE_RATE, 0), `${pack}|${kind}`, realGainDb(kind)) : synthSfx(pack, kind, SAMPLE_RATE, variant);
       b = this.ctx.createBuffer(1, data.length, SAMPLE_RATE);
       b.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
       this.sfxCache.set(key, b);
       if (this.sfxCache.size > 120) this.sfxCache.clear();
     }
     return b;
+  }
+
+  /** 目前用的音效包（關閉＝null） */
+  currentPack() {
+    return this.plan?.pack ?? null;
+  }
+
+  /** 直接播一段音效（取樣率 SAMPLE_RATE；真實音效的片段編輯器試聽用），大小和 playSfx 的 k=1 一樣 */
+  playPcm(data: Float32Array) {
+    if (!this.ctx || !this.sfxGain || !data.length) return;
+    const b = this.ctx.createBuffer(1, data.length, SAMPLE_RATE);
+    b.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+    const node = this.ctx.createBufferSource();
+    node.buffer = b;
+    const g = this.ctx.createGain();
+    g.gain.value = 1.1;
+    node.connect(g).connect(this.sfxGain);
+    node.start();
   }
 
   playSfx(kind: SfxKind, k = 1, rate = 1) {

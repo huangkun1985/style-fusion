@@ -197,7 +197,7 @@ export async function makeStylePack(o: PackOpts, onPhase: (text: string, p: numb
   add(`${base}.sfproj`, JSON.stringify(proj, null, 2));
   const sounds = (s.sounds ?? []).filter((x) => Object.values(s.sfxMap).includes(x.id));
   const listed = ['規格.html', '讀我.txt', ...files];
-  add('規格.html', specHtml(s.projectName, film, rows, s.film.markers, sounds, listed));
+  add('規格.html', specHtml(s.projectName, film, rows, film.markers, sounds, listed));
   const readme = [
     `Style Fusion 風格包：${s.projectName}`,
     '',

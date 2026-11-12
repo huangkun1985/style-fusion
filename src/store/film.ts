@@ -19,7 +19,8 @@ import { resolveLook, resolveMove } from '../engine/resolve';
 import { SUBJECTS, subjectVersion } from '../engine/subjects';
 import { themeOf, themes } from '../engine/themes';
 import type { Look, Move, SubjectId, Tune } from '../engine/types';
-import { FILM_DEFAULT, newId, SCENE_DUR, MAX_MARKERS, type FilmSettings, type Scene } from './project';
+import { FILM_DEFAULT, newId, SCENE_DUR, MAX_MARKERS, type FilmSettings, type Marker, type Scene } from './project';
+import { anchorAt, markerTime } from './markers';
 import { stashActive } from './scenes';
 import { useStore } from './store';
 
@@ -63,6 +64,8 @@ export interface FilmModel {
   /** 給介面看的說明（例如速度改太多、退回畫面遷就音樂） */
   note: string;
   key: string;
+  /** 標記算好的時間（黏在場景上的跟著場景走），依時間排好 */
+  markers: { id: string; t: number; label: string; scene?: string }[];
 }
 
 const MAX_DRIFT = 0.06;
@@ -203,8 +206,11 @@ function buildFilm(s: St): FilmModel {
     return shot;
   });
   const barSec = plan.song.seconds / plan.song.bars;
-  return { shots, total: t, fade: film.fade, sync, plan, bpm, meter, barSec, scored: generated, drift, note, key: `${plan.musicKey}|${shots.map((x) => `${x.id}:${x.dur.toFixed(3)}:${x.trans}`).join(',')}` };
+  const markers = film.markers.map((m) => ({ id: m.id, label: m.label, scene: m.scene, t: markerTime(shots, t, m) })).sort((a, b) => a.t - b.t);
+  return { shots, total: t, fade: film.fade, sync, plan, bpm, meter, barSec, scored: generated, drift, note, markers, key: `${plan.musicKey}|${shots.map((x) => `${x.id}:${x.dur.toFixed(3)}:${x.trans}`).join(',')}` };
 }
+
+export { anchorAt, markerTime };
 
 export const clampDur = (x: number) => Math.min(SCENE_DUR.max, Math.max(SCENE_DUR.min, x));
 
@@ -323,16 +329,31 @@ export function setFilm(p: Partial<FilmSettings>) {
 export function addMarker(t: number, label = ''): string | null {
   const s = useStore.getState();
   if (s.film.markers.length >= MAX_MARKERS) return `標記最多 ${MAX_MARKERS} 個`;
-  const tt = Math.round(t * 100) / 100;
-  if (s.film.markers.some((m) => Math.abs(m.t - tt) < 0.05)) return '這個時間已經有標記了';
-  const markers = [...s.film.markers, { id: newId(), t: tt, label: label || `標記 ${s.film.markers.length + 1}` }].sort((a, b) => a.t - b.t);
+  const model = filmModel(s);
+  const tt = Math.round(Math.max(0, Math.min(t, model.total - 0.01)) * 100) / 100;
+  if (model.markers.some((m) => Math.abs(m.t - tt) < 0.05)) return '這個時間已經有標記了';
+  const markers = [...s.film.markers, { id: newId(), t: tt, label: label || `標記 ${s.film.markers.length + 1}`, ...anchorAt(model, tt) }].sort((a, b) => a.t - b.t);
   setFilm({ markers });
   return null;
 }
 
+/** 改標記：t＝搬到片子的這個時間（重新黏到那個時間所在的場景）；label＝改名 */
 export function updateMarker(id: string, p: { t?: number; label?: string }) {
   const s = useStore.getState();
-  const markers = s.film.markers.map((m) => (m.id === id ? { ...m, ...(p.t !== undefined ? { t: Math.max(0, Math.round(p.t * 100) / 100) } : {}), ...(p.label !== undefined ? { label: p.label.slice(0, 40) } : {}) } : m)).sort((a, b) => a.t - b.t);
+  const model = p.t !== undefined ? filmModel(s) : null;
+  const markers = s.film.markers
+    .map((m) => {
+      if (m.id !== id) return m;
+      let next: Marker = { ...m };
+      if (p.t !== undefined && model) {
+        const tt = Math.round(Math.max(0, Math.min(p.t, model.total - 0.01)) * 100) / 100;
+        const { scene: _s, off: _o, ...rest } = next;
+        next = { ...rest, t: tt, ...anchorAt(model, tt) };
+      }
+      if (p.label !== undefined) next.label = p.label.slice(0, 40);
+      return next;
+    })
+    .sort((a, b) => a.t - b.t);
   setFilm({ markers });
 }
 

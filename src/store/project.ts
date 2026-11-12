@@ -74,11 +74,17 @@ export interface Scene {
 
 export const SCENE_DUR = { min: 0.5, max: 60 };
 
-/** 片子上的標記（2.0 β，F10）：時間是整支片子的秒數 */
+/**
+ * 片子上的標記（2.0 β，F10）：t 是整支片子的秒數。
+ * 2.0 正式：標記黏在某一場上（scene＋off＝那一場開始後幾秒），場景改長度、搬位置時標記跟著走；
+ * t 仍然存著（最後一次算出來的時間），舊的專案、找不到那一場時用它。
+ */
 export interface Marker {
   id: string;
   t: number;
   label: string;
+  scene?: string;
+  off?: number;
 }
 
 /** 整支片子的設定 */
@@ -105,6 +111,12 @@ export interface SoundAsset {
   dur: number;
   /** 修剪後的 WAV（base64，單聲道 22.05 kHz 16 位元） */
   b64: string;
+  /** 2.0 正式：音量微調（dB，−12～+12；對齊響度之後再加），沒設＝0 */
+  gain?: number;
+  /** 2.0 正式：用了原始錄音的哪一段（秒）；沒設＝自動「只留第一下」 */
+  range?: [number, number];
+  /** Freesound 的試聽檔網址（重新選片段時要再抓一次原始錄音） */
+  preview?: string;
 }
 export const MAX_SOUNDS = 24;
 
@@ -288,7 +300,8 @@ export function sanitizeFilm(raw: unknown): FilmSettings {
   for (const x of Array.isArray(o.markers) ? o.markers : []) {
     const m = obj(x);
     if (typeof m.t !== 'number' || !Number.isFinite(m.t)) continue;
-    markers.push({ id: idOf(m.id), t: Math.max(0, Math.min(600, m.t)), label: typeof m.label === 'string' ? m.label.slice(0, 40) : '' });
+    const anchor = typeof m.scene === 'string' && /^[\w-]{1,40}$/.test(m.scene) && typeof m.off === 'number' && Number.isFinite(m.off) ? { scene: m.scene, off: Math.max(0, Math.min(SCENE_DUR.max, m.off)) } : {};
+    markers.push({ id: idOf(m.id), t: Math.max(0, Math.min(600, m.t)), label: typeof m.label === 'string' ? m.label.slice(0, 40) : '', ...anchor });
     if (markers.length >= MAX_MARKERS) break;
   }
   markers.sort((a, b) => a.t - b.t);
@@ -310,6 +323,9 @@ export function sanitizeSounds(raw: unknown, rawMap: unknown): { sounds?: SoundA
       page,
       dur: typeof o.dur === 'number' && Number.isFinite(o.dur) ? Math.max(0, Math.min(30, o.dur)) : 0,
       b64: o.b64,
+      ...(typeof o.gain === 'number' && Number.isFinite(o.gain) && o.gain !== 0 ? { gain: Math.max(-12, Math.min(12, Math.round(o.gain * 2) / 2)) } : {}),
+      ...(Array.isArray(o.range) && o.range.length === 2 && o.range.every((v) => typeof v === 'number' && Number.isFinite(v)) && o.range[1] > o.range[0] ? { range: [Math.max(0, o.range[0]), Math.min(600, o.range[1])] as [number, number] } : {}),
+      ...(typeof o.preview === 'string' && /^https:\/\/cdn\.freesound\.org\/previews\/[\w/.-]+$/.test(o.preview) ? { preview: o.preview } : {}),
     });
     if (sounds.length >= MAX_SOUNDS) break;
   }

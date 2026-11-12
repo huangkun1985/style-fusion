@@ -198,6 +198,8 @@ export default function App() {
         return;
       }
       if (t?.closest('input, textarea, select, [contenteditable]') || e.metaKey || e.ctrlKey || e.altKey) return;
+      // 元件自己處理掉的按鍵（例如時間軸上選到的標記用方向鍵微調）不再當成全域快捷鍵
+      if (e.defaultPrevented) return;
       // 焦點在按鈕或連結上時，空白鍵留給它原本的「點擊」行為
       if (e.code === 'Space' && t?.closest('button, a, [role="radio"]')) return;
       const s = useStore.getState();

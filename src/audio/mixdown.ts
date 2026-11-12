@@ -1,7 +1,7 @@
 // 離線混音：把 BGM 循環與動畫提示點的音效混成一段音訊，供導出 WAV／影片使用。
 import type { SfxSource } from './cues';
 import { newStereo, softLimit, type Stereo } from './dsp';
-import { levelMatched, realSfx } from './realSfx';
+import { levelMatched, realGainDb, realSfx } from './realSfx';
 import { synthSfx } from './sfx';
 import type { PackId } from './types';
 
@@ -51,7 +51,7 @@ export function mixdown(o: MixdownOpts): Stereo {
       if (!b) {
         // 換成真實錄音的種類用錄音（2.0 β）；其他照舊用程式合成
         const real = realSfx(cue.kind);
-        b = real ? levelMatched(real, synthSfx(o.pack!, cue.kind, o.sr, 0), `${o.pack}|${cue.kind}`) : synthSfx(o.pack!, cue.kind, o.sr, variant);
+        b = real ? levelMatched(real, synthSfx(o.pack!, cue.kind, o.sr, 0), `${o.pack}|${cue.kind}`, realGainDb(cue.kind)) : synthSfx(o.pack!, cue.kind, o.sr, variant);
         cache.set(key, b);
       }
       const start = Math.round(t * o.sr);

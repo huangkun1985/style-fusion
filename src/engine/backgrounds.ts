@@ -555,20 +555,11 @@ const BG: Record<string, (b: B) => void> = {
       ctx.fill();
     }
   },
+  // 波普網點：靜態（只跟畫面範圍有關）。鏡頭不動時畫一次存成圖、之後直接貼；鏡頭在動（範圍每幀都變）時照舊直接畫。
+  // 以前每幀重建約 6,000 個圓，偶爾卡 20～40 ms（2.0 正式量測時發現）
   halfdots: (b) => {
     fillAll(b, b.P.bg);
-    const { ctx } = b;
-    const s = 12;
-    ctx.fillStyle = b.P.bg2;
-    ctx.beginPath();
-    for (let x = Math.floor(b.X0 / s) * s; x < b.X0 + b.W; x += s)
-      for (let y = Math.floor(b.Y0 / s) * s; y < b.Y0 + b.H; y += s) {
-        const k = (x / b.hw + y / b.hh + 2) / 4;
-        const r = 0.6 + 4.6 * Math.max(0, Math.min(1, k));
-        ctx.moveTo(x + r, y);
-        ctx.arc(x, y, r, 0, TAU);
-      }
-    ctx.fill();
+    cachedLayer(b, `halfdots|${b.P.bg2}`, drawHalfdots);
   },
   burst: (b) => {
     fillAll(b, b.P.bg);
@@ -661,28 +652,14 @@ const BG: Record<string, (b: B) => void> = {
     }
   },
   // 軟木板：底色加上深淺不一的小顆粒，便利貼貼在上面的感覺
+  // 軟木板：顆粒是靜態的，畫一次成可重複的圖塊（36×36 格、2 倍解析度），之後每幀只要一次 pattern 填色。
+  // 以前每幀逐顆畫（1280×720 約 8～15 ms，超過每幀 6 ms 的預算；2.0 正式量測時發現）。
   cork: (b) => {
     fillAll(b, b.P.bg);
-    const { ctx } = b;
-    const step = 7;
-    const cols = [rgba(darken(b.P.bg, 0.3), 0.32), rgba(b.P.bg2, 0.5), rgba(darken(b.P.bg, 0.12), 0.45)];
-    for (let k = 0; k < cols.length; k++) {
-      ctx.fillStyle = cols[k];
-      ctx.beginPath();
-      for (let y = b.Y0; y < b.Y0 + b.H; y += step) {
-        for (let x = b.X0; x < b.X0 + b.W; x += step) {
-          const gx = Math.floor(x / step);
-          const gy = Math.floor(y / step);
-          if (hash(gx, gy, 40 + k) > 0.34) continue;
-          const r = 0.8 + hash(gx, gy, 50 + k) * 1.9;
-          const px = x + hash(gx, gy, 60 + k) * step;
-          const py = y + hash(gx, gy, 70 + k) * step;
-          ctx.moveTo(px + r, py);
-          ctx.arc(px, py, r, 0, TAU);
-        }
-      }
-      ctx.fill();
-    }
+    const pat = corkPattern(b.ctx, b.P);
+    if (!pat) return;
+    b.ctx.fillStyle = pat;
+    b.ctx.fillRect(b.X0, b.Y0, b.W, b.H);
   },
   // 剪報散落：桌面上散落著大小不一的紙片、報紙與色紙（有文字行與網點）
   scraps: (b) => {
@@ -854,3 +831,114 @@ export function drawBackground(ctx: CanvasRenderingContext2D, env: Env, look: Lo
 }
 
 export const BG_TYPES = Object.keys(BG);
+
+// ---------- 軟木板的顆粒圖塊（依顏色快取） ----------
+const CORK_STEP = 7;
+const CORK_CELLS = 36;
+const CORK_RES = 2;
+const corkCache = new Map<string, { canvas: HTMLCanvasElement | OffscreenCanvas; pats: WeakMap<object, CanvasPattern> }>();
+function corkPattern(ctx: CanvasRenderingContext2D, P: Palette): CanvasPattern | null {
+  const key = `${P.bg}|${P.bg2}`;
+  let e = corkCache.get(key);
+  if (!e) {
+    const T = CORK_STEP * CORK_CELLS;
+    const N = T * CORK_RES;
+    const canvas: HTMLCanvasElement | OffscreenCanvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(N, N) : Object.assign(document.createElement('canvas'), { width: N, height: N });
+    const g = canvas.getContext('2d') as CanvasRenderingContext2D | null;
+    if (!g) return null;
+    g.scale(CORK_RES, CORK_RES);
+    const cols = [rgba(darken(P.bg, 0.3), 0.32), rgba(P.bg2, 0.5), rgba(darken(P.bg, 0.12), 0.45)];
+    for (let k = 0; k < cols.length; k++) {
+      g.fillStyle = cols[k];
+      g.beginPath();
+      for (let gy = 0; gy < CORK_CELLS; gy++)
+        for (let gx = 0; gx < CORK_CELLS; gx++) {
+          if (hash(gx, gy, 40 + k) > 0.34) continue;
+          const r = 0.8 + hash(gx, gy, 50 + k) * 1.9;
+          const px = gx * CORK_STEP + hash(gx, gy, 60 + k) * CORK_STEP;
+          const py = gy * CORK_STEP + hash(gx, gy, 70 + k) * CORK_STEP;
+          // 靠邊的顆粒在對邊再畫一次，圖塊接起來才看不出縫
+          const xs = px + r > T ? [0, -T] : px - r < 0 ? [0, T] : [0];
+          const ys = py + r > T ? [0, -T] : py - r < 0 ? [0, T] : [0];
+          for (const ox of xs)
+            for (const oy of ys) {
+              g.moveTo(px + ox + r, py + oy);
+              g.arc(px + ox, py + oy, r, 0, TAU);
+            }
+        }
+      g.fill();
+    }
+    e = { canvas, pats: new WeakMap() };
+    if (corkCache.size > 16) corkCache.clear();
+    corkCache.set(key, e);
+  }
+  // pattern 綁在畫布的 context 上：每個 context 各建一個
+  let pat = e.pats.get(ctx) ?? null;
+  if (!pat) {
+    pat = ctx.createPattern(e.canvas as CanvasImageSource, 'repeat');
+    if (!pat) return null;
+    pat.setTransform(new DOMMatrix().scale(1 / CORK_RES, 1 / CORK_RES));
+    e.pats.set(ctx, pat);
+  }
+  return pat;
+}
+
+// ---------- 靜態背景圖層的快取（鏡頭不動時用） ----------
+function drawHalfdots(ctx: CanvasRenderingContext2D, b: B) {
+  const s = 12;
+  ctx.fillStyle = b.P.bg2;
+  ctx.beginPath();
+  for (let x = Math.floor(b.X0 / s) * s; x < b.X0 + b.W; x += s)
+    for (let y = Math.floor(b.Y0 / s) * s; y < b.Y0 + b.H; y += s) {
+      const k = (x / b.hw + y / b.hh + 2) / 4;
+      const r = 0.6 + 4.6 * Math.max(0, Math.min(1, k));
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, TAU);
+    }
+  ctx.fill();
+}
+
+interface Layer {
+  key: string;
+  canvas: HTMLCanvasElement | OffscreenCanvas;
+}
+const layers: Layer[] = [];
+/** 最近看過、但還沒建快取的範圍（第二次看到同一個範圍才建，鏡頭在動時就不會白建） */
+const seen: string[] = [];
+/**
+ * 畫一層靜態的背景：同一個範圍、同一個縮放（鏡頭沒動）就貼快取的圖；
+ * 第一次看到的範圍直接畫（鏡頭在動時每幀都是新的範圍，不浪費時間建快取），第二次看到才建
+ */
+function cachedLayer(b: B, id: string, draw: (ctx: CanvasRenderingContext2D, b: B) => void) {
+  const m = b.ctx.getTransform();
+  const sc = Math.hypot(m.a, m.b);
+  const r2 = (v: number) => Math.round(v * 2) / 2;
+  const key = `${id}|${r2(b.X0)},${r2(b.Y0)},${r2(b.W)},${r2(b.H)},${r2(b.hw)},${r2(b.hh)}|${sc.toFixed(3)}|${m.b.toFixed(4)}`;
+  const hit = layers.find((l) => l.key === key);
+  if (hit) {
+    b.ctx.drawImage(hit.canvas as CanvasImageSource, b.X0, b.Y0, b.W, b.H);
+    return;
+  }
+  const again = seen.includes(key);
+  if (!again) {
+    seen.unshift(key);
+    if (seen.length > 12) seen.length = 12;
+  }
+  if (!again || Math.abs(m.b) > 1e-4) {
+    draw(b.ctx, b);
+    return;
+  }
+  const w = Math.max(1, Math.min(4096, Math.ceil(b.W * sc)));
+  const h = Math.max(1, Math.min(4096, Math.ceil(b.H * sc)));
+  const canvas: HTMLCanvasElement | OffscreenCanvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+  const g = canvas.getContext('2d') as CanvasRenderingContext2D | null;
+  if (!g) {
+    draw(b.ctx, b);
+    return;
+  }
+  g.setTransform(w / b.W, 0, 0, h / b.H, -b.X0 * (w / b.W), -b.Y0 * (h / b.H));
+  draw(g, { ...b, ctx: g });
+  layers.unshift({ key, canvas });
+  if (layers.length > 6) layers.length = 6;
+  b.ctx.drawImage(canvas as CanvasImageSource, b.X0, b.Y0, b.W, b.H);
+}

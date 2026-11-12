@@ -11,16 +11,20 @@ const TARGET_PEAK = 0.62;
 export const MAX_SFX_SEC = 4;
 
 let real: Partial<Record<SfxKind, Float32Array>> = {};
+let gains: Partial<Record<SfxKind, number>> = {};
 let rev = 0;
 export const realSfxRev = () => rev;
 /** 目前生效的真實音效（取樣率 SAMPLE_RATE） */
 export const realSfx = (kind: SfxKind): Float32Array | null => real[kind] ?? null;
+/** 使用者對這種音效的音量微調（dB；對齊響度之後再加） */
+export const realGainDb = (kind: SfxKind): number => gains[kind] ?? 0;
 
 const decoded = new Map<string, Float32Array>();
 
 /** store 同步過來：哪一種音效用哪一個檔 */
-export function setRealSfx(map: Record<string, string>, sounds: { id: string; b64: string }[]) {
+export function setRealSfx(map: Record<string, string>, sounds: { id: string; b64: string; gain?: number }[]) {
   const next: Partial<Record<SfxKind, Float32Array>> = {};
+  const g: Partial<Record<SfxKind, number>> = {};
   for (const [kind, id] of Object.entries(map)) {
     const s = sounds.find((x) => x.id === id);
     if (!s) continue;
@@ -34,8 +38,10 @@ export function setRealSfx(map: Record<string, string>, sounds: { id: string; b6
       decoded.set(s.b64.slice(0, 64) + s.b64.length, pcm);
     }
     next[kind as SfxKind] = pcm;
+    if (s.gain) g[kind as SfxKind] = s.gain;
   }
   real = next;
+  gains = g;
   rev++;
 }
 
@@ -114,17 +120,21 @@ const matched = new WeakMap<Float32Array, Map<string, Float32Array>>();
  * 音量對齊：真實音效的「有聲部分」響度調到和它取代的那個合成音效一樣（倍率 0.25～4，峰值不超過 0.95）。
  * key 是音效包＋種類（換音效包時重算）
  */
-export function levelMatched(real: Float32Array, synth: Float32Array, key: string): Float32Array {
+export function levelMatched(real: Float32Array, synth: Float32Array, key: string, gainDb = 0): Float32Array {
   let m = matched.get(real);
   if (!m) matched.set(real, (m = new Map()));
+  key = `${key}|${gainDb}`;
   const hit = m.get(key);
   if (hit) return hit;
   const rr = activeRms(real);
   const sr = activeRms(synth);
   let g = rr > 0 && sr > 0 ? Math.min(4, Math.max(0.25, sr / rr)) : 1;
+  g *= Math.pow(10, gainDb / 20);
   let peak = 0;
   for (let i = 0; i < real.length; i++) peak = Math.max(peak, Math.abs(real[i]));
-  if (peak * g > 0.95) g = 0.95 / Math.max(1e-9, peak);
+  // 峰值上限：使用者自己調大時放寬到 0.99（還是不削波）
+  const cap = gainDb > 0 ? 0.99 : 0.95;
+  if (peak * g > cap) g = cap / Math.max(1e-9, peak);
   const out = new Float32Array(real.length);
   for (let i = 0; i < real.length; i++) out[i] = real[i] * g;
   m.set(key, out);
@@ -147,13 +157,11 @@ export function upsample(x: Float32Array, from: number, to: number): Float32Arra
 }
 
 /**
- * 整理一段下載的錄音（已解碼成單聲道、取樣率 sr）：
+ * 自動選段（「只留第一下」）：x 是解碼後的單聲道、取樣率 sr。回傳秒數 [a, b]。
  * 1. 修剪前後的靜音（比峰值低 40 dB 的部分；開頭留 5 毫秒）
- * 2. 只留第一下（之後安靜 150 毫秒就結束）；最長 MAX_SFX_SEC 秒，結尾 30 毫秒淡出
- * 3. 這一段的峰值對齊到 TARGET_PEAK
- * 4. 轉成 22.05 kHz
+ * 2. 只留第一下（之後安靜 150 毫秒就結束）；最長 MAX_SFX_SEC 秒
  */
-export function prepareSfx(x: Float32Array, sr: number): { pcm: Float32Array; dur: number } {
+export function autoRange(x: Float32Array, sr: number): [number, number] {
   let peak = 1e-9;
   for (let i = 0; i < x.length; i++) peak = Math.max(peak, Math.abs(x[i]));
   const th = peak * 0.01;
@@ -181,7 +189,19 @@ export function prepareSfx(x: Float32Array, sr: number): { pcm: Float32Array; du
     } else quiet = 0;
   }
   b = Math.min(x.length, b + Math.round(sr * 0.04), a + Math.round(sr * MAX_SFX_SEC));
-  const seg = x.slice(a, b);
+  return [a / sr, Math.max(a + 1, b) / sr];
+}
+
+/**
+ * 切出 [a, b] 秒（最長 MAX_SFX_SEC）：開頭 3 毫秒淡入、結尾 30 毫秒淡出，峰值對齊到 TARGET_PEAK，轉成 22.05 kHz。
+ * 使用者自己選片段（2.0 正式）與自動選段都走這裡
+ */
+export function cutSfx(x: Float32Array, sr: number, a: number, b: number): { pcm: Float32Array; dur: number } {
+  const i0 = Math.max(0, Math.min(x.length - 1, Math.round(a * sr)));
+  const i1 = Math.max(i0 + 1, Math.min(x.length, Math.round(b * sr), i0 + Math.round(sr * MAX_SFX_SEC)));
+  const seg = x.slice(i0, i1);
+  const fin = Math.min(seg.length, Math.round(sr * 0.003));
+  for (let i = 0; i < fin; i++) seg[i] *= i / fin;
   const fade = Math.min(seg.length, Math.round(sr * 0.03));
   for (let i = 0; i < fade; i++) seg[seg.length - 1 - i] *= i / fade;
   let segPeak = 1e-9;
@@ -190,6 +210,12 @@ export function prepareSfx(x: Float32Array, sr: number): { pcm: Float32Array; du
   for (let i = 0; i < seg.length; i++) seg[i] *= g;
   const out = resampleDown(seg, sr, STORE_SR);
   return { pcm: out, dur: out.length / STORE_SR };
+}
+
+/** 整理一段下載的錄音：自動選段（只留第一下）＋切出來。range 是用了原始錄音的哪一段（秒） */
+export function prepareSfx(x: Float32Array, sr: number): { pcm: Float32Array; dur: number; range: [number, number] } {
+  const range = autoRange(x, sr);
+  return { ...cutSfx(x, sr, range[0], range[1]), range };
 }
 
 /** 降取樣（先做簡單的低通避免疊頻） */

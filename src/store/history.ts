@@ -11,7 +11,7 @@ import type { AudioPrefs } from '../audio/types';
 import type { Sel } from '../data/schema';
 import type { SubjectId, Tune } from '../engine/types';
 import { themes } from '../engine/themes';
-import type { Aspect, ChatMsg, FilmSettings, Scene } from './project';
+import type { Aspect, ChatMsg, FilmSettings, Scene, SoundAsset } from './project';
 import { useStore } from './store';
 
 type Music = Omit<AudioPrefs, 'on' | 'bgm' | 'sfx' | 'bgmVol' | 'sfxVol'>;
@@ -32,13 +32,15 @@ interface Doc {
   /** 2.0 β：整支片子的設定（標記、轉場）與音效替換 */
   film: FilmSettings;
   sfxMap: Record<string, string>;
+  /** 2.0 正式：真實音效本身（片段、音量改了也能復原） */
+  sounds: SoundAsset[];
 }
 
 const LIMIT = 100;
 const musicOfAudio = ({ on: _on, bgm: _b, sfx: _s, bgmVol: _bv, sfxVol: _sv, ...rest }: AudioPrefs): Music => rest;
 // 主題的 JSON 不在 store 裡：記住「上一次看到的」，算變動之前的樣子時用它
 let knownTheme: string | null = null;
-const docOf = (s: ReturnType<typeof useStore.getState>, theme: string | null = themes.currentJson()): Doc => ({ v: s.v, m: s.m, subject: s.subject, tune: s.tune, aspect: s.aspect, music: musicOfAudio(s.audio), theme, scenes: s.scenes, active: s.activeScene, chat: s.chat, content: s.content, film: s.film, sfxMap: s.sfxMap });
+const docOf = (s: ReturnType<typeof useStore.getState>, theme: string | null = themes.currentJson()): Doc => ({ v: s.v, m: s.m, subject: s.subject, tune: s.tune, aspect: s.aspect, music: musicOfAudio(s.audio), theme, scenes: s.scenes, active: s.activeScene, chat: s.chat, content: s.content, film: s.film, sfxMap: s.sfxMap, sounds: s.sounds });
 const paused = () => {
   const h = useStore.getState().hist;
   return h.showingA || h.previewing;
@@ -92,7 +94,7 @@ function apply(d: Doc) {
     /* 存的主題壞了：留著現在的 */
   }
   knownTheme = themes.currentJson();
-  useStore.setState((s) => ({ v: d.v, m: d.m, subject: d.subject, tune: d.tune, aspect: d.aspect, audio: sanitizeAudioPrefs({ ...s.audio, ...d.music }), scenes: d.scenes, activeScene: d.active, chat: d.active !== s.activeScene ? d.chat : s.chat, content: d.content, film: d.film, sfxMap: d.sfxMap }));
+  useStore.setState((s) => ({ v: d.v, m: d.m, subject: d.subject, tune: d.tune, aspect: d.aspect, audio: sanitizeAudioPrefs({ ...s.audio, ...d.music }), scenes: d.scenes, activeScene: d.active, chat: d.active !== s.activeScene ? d.chat : s.chat, content: d.content, film: d.film, sfxMap: d.sfxMap, sounds: d.sounds }));
   applying = false;
   snapAuditionToPlan();
 }
@@ -107,7 +109,7 @@ export function startHistory() {
     knownTheme = themes.currentJson();
     if (applying || s.hist.showingA) return;
     // 對話（chat）本身不算一步，但跟著文件一起記，換場景、復原時才對得上
-    const changed = s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.audio !== prev.audio || s.themeRev !== prev.themeRev || s.scenes !== prev.scenes || s.activeScene !== prev.activeScene || s.content !== prev.content || s.film !== prev.film || s.sfxMap !== prev.sfxMap;
+    const changed = s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.audio !== prev.audio || s.themeRev !== prev.themeRev || s.scenes !== prev.scenes || s.activeScene !== prev.activeScene || s.content !== prev.content || s.film !== prev.film || s.sfxMap !== prev.sfxMap || s.sounds !== prev.sounds;
     if (!changed) return;
     if (s.hist.previewing) {
       if (s.hist.comparing) return;

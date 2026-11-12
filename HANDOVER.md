@@ -1,7 +1,10 @@
 # Style Fusion 交接文件（Hand over）
 
 > 寫給**在新的 session 接手這個專案的人（或新的 Claude）**。
-> ## 🆕 2026-11-12：2.0 β 進階與交付完成（v2.0.0-beta.1，**沒有提交**）
+> ## 🆕 2026-11-12：2.0 正式版候選完成（v2.0.0-rc.1，**沒有提交**）
+> **新 session 先讀 `docs/交接-2.0-rc1後.md`，下一階段用 `docs/下個session的提示詞-2.0-驗收.md`。** 驗收：`docs/驗收報告-v2.0.0-rc.1.md`；使用說明：`docs/使用說明.md`。架構見第 6.11 節。使用者說「不驗收、你自己決定」，所以 α1～rc1 都沒人驗收過（版本叫 rc）。使用者說「提交」才 commit。
+>
+> ## 2026-11-12：2.0 β 進階與交付完成（v2.0.0-beta.1，已提交 69b7935）
 > **新 session 先讀 `docs/交接-2.0-beta1後.md`，下一階段用 `docs/下個session的提示詞-2.0-正式.md`（先請使用者照 α 與 β 兩份驗收清單點，不要先寫程式）。** 驗收：`docs/驗收報告-v2.0.0-beta.1.md`。架構見第 6.10 節。使用者說「提交」才 commit。
 >
 > ## 2026-11-12：2.0 α3 風格牆與場景完成（v2.0.0-alpha.3，已提交並推送）
@@ -241,6 +244,13 @@ v1 檔案**不要改**（使用者要比較新舊）；改設計請改 v2。新�
 - **真實音效**：伺服器 `scripts/agent-bridge.ts` 的 `sfx-search`（讀 Freesound 搜尋頁，`parseFreesound`）與 `sfx-fetch`（只代抓 `cdn.freesound.org/previews/`），和 Agent 共用通行碼；前端 `agent/bridge.ts` 的 `bridgePost`。`audio/realSfx.ts`：修剪、對齊、WAV 編解碼、`setRealSfx`（AudioBridge 同步）、`realSfx(kind)`（`engine.sfxBuffer` 與 `mixdown` 優先用它）。資料在 `Project.sounds`／`sfxMap`（逐欄檢查在 `project.ts`）。介面 `components/RealSfx.tsx`。
 - **審查**：R-02 `Track.trim`（`arrange.ts` 寫、`gm.ts` 精修對齊時加）；R-15 `stemsSupported`；R-16 `RenderOpts.noFold`＋`dsp.keepTail`。
 - **改 vite 外掛（agent-bridge）要重開開發伺服器**，網頁端的 `import()` 才拿得到新的模組。
+
+### 6.11 2.0 正式版候選（rc1）
+- **時間軸**：`Timeline.tsx` 的縮放是本地狀態（`zoom`，不存檔），內容寬度＝可見寬度 × 倍率，捲動區 `hide-scrollbar` 加自製的 `Overview` 總覽條。浮層（場景選單、標記編輯）用 `overlay` 狀態畫在捲動區外；點開浮層的按鈕要加 `data-tl-trigger`，不然「點外面關掉」會先把它關掉。
+- **標記**：`Marker.scene`＋`off` 是真正的位置，`t` 只是退路；要拿時間一律用 `filmModel().markers`（`markers.ts` 的 `markerTime`），不要直接讀 `s.film.markers[i].t`。
+- **真實音效**：`SoundAsset.gain`（dB）在 `levelMatched` 之後才乘（先乘會被響度對齊抵掉）；`range` 是用了原始錄音的哪一段；`preview` 是重新抓原始錄音用的網址。`sounds` 在復原歷史裡。
+- **靜態背景快取**：`backgrounds.ts` 的 `cachedLayer(b, id, draw)`——同一個範圍與縮放第二次出現才建圖、之後貼圖；鏡頭在動時照舊直接畫。只給跟時間無關的圖層用。軟木板改用 pattern 圖塊（`corkPattern`）。
+- **測試陷阱**：面板隱藏時 `ResizeObserver` 也不回報（寬度停在舊值）；合成的指標事件會讓 `setPointerCapture` 丟錯（已包 try）。Agent／Freesound 的介面可以攔 `window.fetch` 回假的 `__sf/agent/*` 回應來測，不花額度、不下載。
 
 ## 7. 常見工作怎麼做
 

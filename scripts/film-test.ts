@@ -3,7 +3,8 @@
 import { composeSong, tempoFor } from '../src/audio/compose';
 import { GENRES } from '../src/audio/genres';
 import { renderScheme } from '../src/audio/render';
-import { decodeWav16, encodeWav16, levelMatched, prepareSfx, STORE_SR } from '../src/audio/realSfx';
+import { autoRange, bytesToB64, cutSfx, decodeWav16, encodeWav16, levelMatched, prepareSfx, STORE_SR } from '../src/audio/realSfx';
+import { anchorAt, markerTime } from '../src/store/markers';
 import type { GenreId, SectionKind } from '../src/audio/types';
 import { sanitizeFilm, sanitizeSounds } from '../src/store/project';
 import { parseFreesound } from './agent-bridge';
@@ -120,6 +121,74 @@ console.log('real sfx ok');
   ok(r?.page === 'https://freesound.org/people/Flem0527/sounds/629987/', '頁面網址');
 }
 console.log('freesound parse ok');
+
+// 6) 2.0 正式：標記黏在場景上（場景改長度、搬位置時跟著走）
+{
+  const shots = [
+    { id: 'a', start: 0, dur: 4 },
+    { id: 'b', start: 4, dur: 6 },
+  ];
+  const at = anchorAt({ shots, total: 10 }, 5.5);
+  ok(at?.scene === 'b' && Math.abs((at?.off ?? -1) - 1.5) < 1e-9, `標記黏到第 2 場 ${JSON.stringify(at)}`);
+  const m = { id: 'm', t: 5.5, label: 'x', ...at! };
+  ok(markerTime(shots, 10, m) === 5.5, '沒改時位置不變');
+  // 第 1 場變長 2 秒：標記跟著往後 2 秒
+  ok(markerTime([{ id: 'a', start: 0, dur: 6 }, { id: 'b', start: 6, dur: 6 }], 12, m) === 7.5, '前一場變長，標記跟著往後');
+  // 兩場對調：標記跟著第 2 場跑到前面
+  ok(markerTime([{ id: 'b', start: 0, dur: 6 }, { id: 'a', start: 6, dur: 4 }], 10, m) === 1.5, '場景搬位置，標記跟著走');
+  // 這一場變短到比 off 還短：停在這一場的結尾
+  ok(markerTime([{ id: 'a', start: 0, dur: 4 }, { id: 'b', start: 4, dur: 1 }], 5, m) === 4.99, '場景變短，標記停在那一場的結尾');
+  // 那一場被刪掉：用存著的 t（不超過片尾）
+  ok(markerTime([{ id: 'a', start: 0, dur: 4 }], 4, m) === 3.99, '那一場刪掉時用存著的時間');
+  // 舊專案（沒有 scene）：用 t
+  ok(markerTime(shots, 10, { id: 'o', t: 2, label: '' }) === 2, '舊的標記用 t');
+  // 逐欄檢查：黏的欄位留著、壞的丟掉
+  const f = sanitizeFilm({ markers: [{ id: 'm1', t: 3, label: 'a', scene: 'b', off: 1.5 }, { id: 'm2', t: 1, label: 'b', scene: 'bad id!', off: 1 }, { id: 'm3', t: 2, label: 'c', scene: 'b', off: 'x' }] });
+  const m1 = f.markers.find((x) => x.id === 'm1');
+  ok(m1?.scene === 'b' && m1.off === 1.5, '黏的欄位跟著專案存讀');
+  ok(f.markers.filter((x) => x.scene).length === 1, '壞的黏著欄位不收');
+}
+console.log('markers ok');
+
+// 7) 2.0 正式：真實音效的片段與音量
+{
+  const sr = 44100;
+  // 0.5 秒安靜 → 0.2 秒聲音 → 0.6 秒安靜 → 0.3 秒聲音
+  const x = new Float32Array(Math.round(sr * 1.6));
+  for (let i = 0; i < x.length; i++) {
+    const t = i / sr;
+    if ((t >= 0.5 && t < 0.7) || (t >= 1.3 && t < 1.6)) x[i] = Math.sin(i * 0.05) * 0.5;
+  }
+  const r = autoRange(x, sr);
+  ok(r[0] > 0.48 && r[0] < 0.5 && r[1] > 0.7 && r[1] < 0.95, `自動選段只留第一下 ${r.map((v) => v.toFixed(3))}`);
+  const p = prepareSfx(x, sr);
+  ok(p.range[0] === r[0] && p.range[1] === r[1], 'prepareSfx 回報用了哪一段');
+  // 自己選第二下
+  const c = cutSfx(x, sr, 1.3, 1.6);
+  ok(Math.abs(c.dur - 0.3) < 0.002, `自選片段長度 ${c.dur.toFixed(3)}`);
+  let pk = 0;
+  for (const v of c.pcm) pk = Math.max(pk, Math.abs(v));
+  ok(Math.abs(pk - 0.62) < 0.03, `自選片段峰值對齊 ${pk.toFixed(3)}`);
+  ok(Math.abs(c.pcm[0]) < 1e-6 && Math.abs(c.pcm[c.pcm.length - 1]) < 0.01, '自選片段開頭淡入、結尾淡出');
+  ok(cutSfx(x, sr, 0, 30).dur <= 4.0001, '片段最長 4 秒');
+  // 音量：+6 dB 約 2 倍、−6 dB 約一半（相對於對齊後）
+  const real = new Float32Array(4410).map((_, i) => Math.sin(i * 0.2) * 0.05);
+  const synth = new Float32Array(4410).map((_, i) => Math.sin(i * 0.3) * 0.2);
+  const peakOf = (a: Float32Array) => a.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  const base = peakOf(levelMatched(real, synth, 'g'));
+  const up = peakOf(levelMatched(real, synth, 'g', 6));
+  const down = peakOf(levelMatched(real, synth, 'g', -6));
+  ok(Math.abs(up / base - 1.995) < 0.02 && Math.abs(down / base - 0.501) < 0.01, `音量微調 +6／−6 dB：${(up / base).toFixed(3)}／${(down / base).toFixed(3)}`);
+  ok(peakOf(levelMatched(real, synth, 'g', 12)) <= 0.99 + 1e-6, '調大也不會削波');
+  // 逐欄檢查
+  const b64 = bytesToB64(encodeWav16(new Float32Array(100), STORE_SR));
+  const sv = sanitizeSounds([{ id: 's1', name: 'a', author: 'b', license: 'CC0', page: '', dur: 0.3, b64, gain: 3.3, range: [1.3, 1.6], preview: 'https://cdn.freesound.org/previews/1/1-hq.mp3' }, { id: 's2', name: 'a', author: 'b', license: 'CC0', page: '', dur: 0.3, b64, gain: 99, range: [2, 1], preview: 'https://evil.example/x.mp3' }], {});
+  const s1 = sv.sounds?.[0];
+  const s2 = sv.sounds?.[1];
+  ok(s1?.gain === 3.5 && s1.range?.[0] === 1.3 && s1.preview?.startsWith('https://cdn.freesound.org/'), `音量、片段、試聽網址跟著專案 ${JSON.stringify({ g: s1?.gain, r: s1?.range })}`);
+  ok(s2?.gain === 12 && !s2.range && !s2.preview, '壞的片段與外站網址不收、音量限制在 ±12');
+}
+console.log('sfx edit ok');
 
 if (fails) {
   console.log(`FILM FAIL（${fails} 項）`);

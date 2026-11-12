@@ -2,9 +2,12 @@
 // 「換成真實音效」打開搜尋視窗：關鍵字已經帶好（英文），候選清單照 sound skill 的判斷方式排序（下載數高的優先；評分人數比平均分可信；
 // 描述看得出錄音來源的優先），你用耳朵試聽後選一個；選定後下載、修剪靜音、對齊音量，存進專案。
 // 只有 start.bat 開時能搜尋與下載（要靠本機伺服器代抓）；已經存進專案的音效任何開法都能播放與導出。
-import { Loader2, Play, RotateCcw, Search, Square } from 'lucide-react';
+import { Loader2, Play, RotateCcw, Search, SlidersHorizontal, Sparkles, Square } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { bridgePost, connectBridge, AgentError } from '../agent/bridge';
+import { suggestSfxKeywords } from '../agent/sfxKeywords';
+import { SUBJECTS } from '../engine/subjects';
+import { themes } from '../engine/themes';
 import { CueTracker } from '../audio/cues';
 import { audioEngine } from '../audio/engine';
 import { bytesToB64, decodeToMono, encodeWav16, prepareSfx, STORE_SR } from '../audio/realSfx';
@@ -13,6 +16,7 @@ import type { SfxKind } from '../audio/types';
 import { useLookMove } from '../store/hooks';
 import { MAX_SOUNDS, newId, type SoundAsset } from '../store/project';
 import { useStore } from '../store/store';
+import { RealSfxEditor } from './RealSfxEditor';
 import { Button, Modal, SectionTitle } from './ui';
 
 /** 每一種音效的建議英文關鍵字（Freesound 的描述多半是英文） */
@@ -61,6 +65,7 @@ export function RealSfxSection() {
   const pack = useStore((s) => s.audio.pack);
   const { look, move, tune } = useLookMove();
   const [pick, setPick] = useState<SfxKind | null>(null);
+  const [edit, setEdit] = useState<SfxKind | null>(null);
   // 這一場會觸發的音效種類，加上已經換過的種類
   const kinds = useMemo(() => {
     let used: SfxKind[] = [];
@@ -89,9 +94,10 @@ export function RealSfxSection() {
           return (
             <div key={k} className="flex h-9 items-center gap-1.5 rounded-md border border-line bg-panel-2 pl-2 pr-1 text-[12px]">
               <span className="w-12 shrink-0 text-fg">{KIND_NAME[k]}</span>
-              <span className={`min-w-0 flex-1 truncate ${a ? 'text-fg' : 'text-fg-3'}`} title={a ? `${a.name}（${a.author}，${a.license}）` : '程式合成（跟著音效包）'}>
+              <span className={`min-w-0 flex-1 truncate ${a ? 'text-fg' : 'text-fg-3'}`} title={a ? `${a.name}（${a.author}，${a.license}）${a.gain ? `，音量 ${a.gain > 0 ? '+' : ''}${a.gain} dB` : ''}` : '程式合成（跟著音效包）'}>
                 {a ? `真實：${a.name}` : '合成'}
               </span>
+              {a?.gain ? <span className="num shrink-0 text-[11px] text-fg-2">{a.gain > 0 ? '+' : ''}{a.gain}dB</span> : null}
               <button
                 type="button"
                 className="flex size-7 shrink-0 items-center justify-center rounded text-fg-2 hover:bg-raise hover:text-fg"
@@ -107,6 +113,9 @@ export function RealSfxSection() {
               <button type="button" className="h-7 shrink-0 rounded border border-line-2 px-2 text-fg hover:bg-raise" title="換成真實音效：到 Freesound 搜尋錄音，試聽後選一個（只有 start.bat 開時能用）" onClick={() => setPick(k)}>
                 {a ? '更換' : '換成真實'}
               </button>
+              <button type="button" disabled={!a} className="flex size-7 shrink-0 items-center justify-center rounded text-fg-2 hover:bg-raise hover:text-fg disabled:opacity-30" title={a ? '調整片段與音量：選用錄音的哪一段、調大小聲。錄音開頭有雜音、或聽起來太搶太小時用' : '換成真實音效之後，可以在這裡調片段與音量'} aria-label="調整片段與音量" onClick={() => setEdit(k)}>
+                <SlidersHorizontal size={12} />
+              </button>
               <button type="button" disabled={!a} className="flex size-7 shrink-0 items-center justify-center rounded text-fg-2 hover:bg-raise hover:text-fg disabled:opacity-30" title="還原成程式合成的音效（可以 Ctrl+Z）" aria-label="還原成合成" onClick={() => set(k, null)}>
                 <RotateCcw size={12} />
               </button>
@@ -115,6 +124,7 @@ export function RealSfxSection() {
         })}
       </div>
       {pick && <RealSfxModal kind={pick} onClose={() => setPick(null)} onPicked={(id) => set(pick, id)} />}
+      {edit && sounds.find((x) => x.id === sfxMap[edit]) && <RealSfxEditor kind={edit} kindName={KIND_NAME[edit]} asset={sounds.find((x) => x.id === sfxMap[edit])!} onClose={() => setEdit(null)} />}
     </div>
   );
 }
@@ -128,23 +138,54 @@ function RealSfxModal({ kind, onClose, onPicked }: { kind: SfxKind; onClose: () 
   const [busy, setBusy] = useState<'search' | string | null>(null);
   const [err, setErr] = useState('');
   const [bridge, setBridge] = useState<'checking' | 'ok' | 'none'>('checking');
+  // 連上 Claude（裝了、登入了）才能請 Agent 建議關鍵字；Freesound 只要本機伺服器
+  const [claude, setClaude] = useState(false);
+  const [ideas, setIdeas] = useState<string[] | null>(null);
+  const [thinking, setThinking] = useState(false);
+  const ideaAbort = useRef<AbortController | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
   const audio = useRef<HTMLAudioElement | null>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => {
-    void connectBridge().then((b) => setBridge(b.state === 'none' ? 'none' : 'ok'));
+    void connectBridge().then((b) => {
+      setBridge(b.state === 'none' ? 'none' : 'ok');
+      setClaude(b.state === 'ok');
+    });
     return () => {
       audio.current?.pause();
       abort.current?.abort();
+      ideaAbort.current?.abort();
     };
   }, []);
-  const search = async () => {
+  const suggest = async () => {
+    if (thinking) {
+      ideaAbort.current?.abort();
+      return;
+    }
+    setThinking(true);
+    setErr('');
+    ideaAbort.current = new AbortController();
+    const s = useStore.getState();
+    const th = s.subject === 'custom' ? themes.current() : null;
+    try {
+      const list = await suggestSfxKeywords(
+        { kind, kindName: KIND_NAME[kind], subject: SUBJECTS[s.subject].name, theme: th ? { name: th.name, desc: th.desc } : undefined, content: s.content as Record<string, string>, topic: s.agent.topic, current: q },
+        ideaAbort.current.signal,
+      );
+      setIdeas(list);
+    } catch (e) {
+      if ((e as AgentError).code !== 'aborted') setErr((e as Error).message);
+    } finally {
+      setThinking(false);
+    }
+  };
+  const search = async (qq = q) => {
     setBusy('search');
     setErr('');
     abort.current?.abort();
     abort.current = new AbortController();
     try {
-      const r = await bridgePost('sfx-search', { q, license: lic }, abort.current.signal);
+      const r = await bridgePost('sfx-search', { q: qq, license: lic }, abort.current.signal);
       const o = (await r.json()) as { rows: Row[] };
       // 音效點要的是短的一下：3 秒以內的排前面（各組裡照下載數）。長的錄音常是一整段環境音或連續好幾下
       setRows([...o.rows.filter((x) => x.dur <= 3), ...o.rows.filter((x) => x.dur > 3)]);
@@ -194,8 +235,8 @@ function RealSfxModal({ kind, onClose, onPicked }: { kind: SfxKind; onClose: () 
     try {
       const res = await bridgePost('sfx-fetch', { url: r.preview });
       const { x, sr } = await decodeToMono(await res.arrayBuffer());
-      const { pcm, dur } = prepareSfx(x, sr);
-      const asset: SoundAsset = { id: newId(), name: r.title.replace(/\.(wav|mp3|ogg|flac|aiff?)$/i, '').slice(0, 80), author: r.author, license: r.license === 'CC0' || r.license === 'BY' || r.license === 'BY-NC' ? r.license : 'BY', page: r.page, dur, b64: bytesToB64(encodeWav16(pcm, STORE_SR)) };
+      const { pcm, dur, range } = prepareSfx(x, sr);
+      const asset: SoundAsset = { id: newId(), name: r.title.replace(/\.(wav|mp3|ogg|flac|aiff?)$/i, '').slice(0, 80), author: r.author, license: r.license === 'CC0' || r.license === 'BY' || r.license === 'BY-NC' ? r.license : 'BY', page: r.page, dur, b64: bytesToB64(encodeWav16(pcm, STORE_SR)), range, ...(/^https:\/\/cdn\.freesound\.org\/previews\//.test(r.preview) ? { preview: r.preview } : {}) };
       useStore.setState((s) => ({ sounds: [...s.sounds, asset] }));
       onPicked(asset.id);
       await audioEngine.unlock();
@@ -236,9 +277,38 @@ function RealSfxModal({ kind, onClose, onPicked }: { kind: SfxKind; onClose: () 
                 <option value="by">CC0＋BY（要標示作者）</option>
                 <option value="any">全部（含 BY-NC，不可商用）</option>
               </select>
-              <Button variant="soft" onClick={() => void search()} disabled={busy === 'search'}>
+              <Button variant="soft" onClick={() => void search()} disabled={busy === 'search'} title="用上面的關鍵字到 Freesound 搜尋">
                 {busy === 'search' ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />} 搜尋
               </Button>
+              <Button
+                variant="ghost"
+                onClick={() => void suggest()}
+                disabled={!claude}
+                className="w-[124px] justify-center"
+                title={claude ? (thinking ? '停止：不等 Agent 的建議了' : 'Agent 建議：依這一場的內容（主體、生成的主題、畫面上的字）想幾組英文關鍵字，約 5～15 秒。不知道怎麼用英文描述這個聲音時用') : 'Agent 建議關鍵字要連上你的 Claude（Agent 面板寫「已連上」時才能用）'}
+              >
+                {thinking ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {thinking ? '想關鍵字…' : 'Agent 建議'}
+              </Button>
+            </div>
+            <div className="hide-scrollbar flex h-7 items-center gap-1.5 overflow-x-auto" aria-label="Agent 建議的關鍵字">
+              {ideas && ideas.length ? (
+                ideas.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      setQ(k);
+                      void search(k);
+                    }}
+                    title={`用「${k}」搜尋`}
+                    className={`h-7 shrink-0 rounded-full border px-2.5 text-[12px] ${k === q ? 'border-mot bg-mot-soft text-fg' : 'border-line-2 text-fg-2 hover:bg-raise hover:text-fg'}`}
+                  >
+                    {k}
+                  </button>
+                ))
+              ) : (
+                <span className="truncate text-[11px] text-fg-3">{claude ? '不知道英文怎麼說？按「Agent 建議」，依這一場的內容想幾組關鍵字，點一下就搜。' : '連上你的 Claude 時，可以請 Agent 依這一場的內容建議關鍵字。'}</span>
+              )}
             </div>
             <p className="text-[11px] leading-relaxed text-fg-3">排序：3 秒以內的短音效在前面，同一組裡下載數多的在前面。評分看人數——★4.4（380 人）比 ★4.9（6 人）可靠；描述裡看得出錄音來源（錄音器材、真實物件）的通常比較好。<b>我聽不到聲音，請你試聽後再選。</b>選定後會下載、只留第一下（修剪前後的靜音）、把音量對齊，存進專案（最長 4 秒）。</p>
           </>

@@ -2,6 +2,7 @@
 // 涵蓋：從 AI 回答取出 JSON、時間點的名字與附帶資料、修改前後的差異（改了幾個值、動到的時間）、對話紀錄與專案的消毒。
 // 本機橋接本身（Host／Origin／通行碼、取消會停掉 Claude Code）要開伺服器才能測，做法寫在驗收報告。
 import { diffThemes, stampContext, stampLabel } from '../src/agent/themeTools';
+import { buildSfxKeywordPrompt, parseSfxKeywords } from '../src/agent/sfxKeywords';
 import { parseTheme } from '../src/engine/themes';
 import { TEMPLATE_BOX, templateJson } from '../src/engine/themeTemplates';
 import { extractThemeJson } from '../src/lib/agentPrompt';
@@ -87,6 +88,18 @@ for (const bad of [{ b64: 'not base64!!' }, { b64: 'x' }, { b64: 5 }, { b64: 'A'
   const w = JSON.parse(JSON.stringify(p));
   w.midi = bad;
   ok(sanitizeProject(w, 'x')?.midi === undefined, `壞的 MIDI 欄位不收（${JSON.stringify(bad)?.slice(0, 30)}）`);
+}
+
+// 6) 2.0 正式：Agent 建議音效關鍵字（組提示詞、讀回答）
+{
+  const pr = buildSfxKeywordPrompt({ kind: 'land', kindName: '落地', subject: '自訂', theme: { name: '咖啡杯', desc: '陶瓷杯放到木桌上' }, content: { title: 'Morning' }, topic: '早晨的咖啡', current: 'soft thud landing' });
+  ok(pr.includes('落地') && pr.includes('陶瓷杯放到木桌上') && pr.includes('title=Morning') && pr.includes('早晨的咖啡') && pr.includes('JSON 陣列'), '關鍵字提示詞帶了這一場的內容');
+  ok(!buildSfxKeywordPrompt({ kind: 'pop', kindName: '彈出', subject: 'UI 介面', current: 'bubble pop' }).includes('生成的內容'), '內建模板沒有主題那一行');
+  ok(parseSfxKeywords('好的：\n["Ceramic cup set down", "mug on wooden table", "soft thud", "soft thud"]').join('|') === 'ceramic cup set down|mug on wooden table|soft thud', '讀 JSON 陣列、轉小寫、去重複');
+  ok(parseSfxKeywords('1. ceramic cup\n- wood knock\n• "glass tap"').join('|') === 'ceramic cup|wood knock|glass tap', '沒有 JSON 時一行一行讀');
+  ok(parseSfxKeywords('["a b c d e f g h", "ok one", 5, "' + 'x'.repeat(60) + '", "日本語"]').join('|') === 'ok one', '太長、不是字串、沒有英文的丟掉');
+  ok(parseSfxKeywords('["a","b","c","d","e","f","g"]').length === 5, '最多 5 組');
+  ok(parseSfxKeywords('沒有東西').length === 0, '讀不到時是空的');
 }
 
 console.log(fails ? `AGENT FAIL（${fails}／${n} 項失敗）` : `AGENT OK（${n} 項）`);
