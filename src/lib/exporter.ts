@@ -5,6 +5,7 @@ import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
 import type { Stereo } from '../audio/dsp';
 import { SAMPLE_RATE } from '../audio/types';
 import { Renderer, loopSeconds } from '../engine/renderer';
+import { drawFilmFrame, filmReady, type FilmModel } from '../store/film';
 import { SUBJECTS } from '../engine/subjects';
 import type { Look, Move, SubjectId, Tune } from '../engine/types';
 
@@ -26,6 +27,10 @@ export interface ExportJob {
   transparent?: boolean;
   /** 要封裝進 MP4／WebM 的音訊（從時間 0 起，取樣率 SAMPLE_RATE，長度需涵蓋整段影片） */
   audio?: Stereo | null;
+  /** 2.0 β：導出整支片子（所有場景接起來，含淡轉場）；有設定就不看 subject／look／move／loops */
+  film?: FilmModel;
+  /** 檔名（不含副檔名）；不給就是 style-fusion-主體 */
+  name?: string;
 }
 
 export interface ExportResult {
@@ -38,7 +43,8 @@ export interface ExportResult {
 export const canMp4 = typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window;
 
 /** 導出的總秒數：指定了 seconds 就用它，否則是動畫循環 × 次數 */
-function totalSeconds(job: Pick<ExportJob, 'subject' | 'move' | 'tune' | 'loops' | 'seconds'>) {
+function totalSeconds(job: Pick<ExportJob, 'subject' | 'move' | 'tune' | 'loops' | 'seconds' | 'film'>) {
+  if (job.film) return { L: job.film.total, total: job.film.total };
   const L = loopSeconds(SUBJECTS[job.subject], job.move, job.tune);
   return { L, total: job.seconds && job.seconds > 0 ? job.seconds : L * job.loops };
 }
@@ -122,13 +128,18 @@ async function encodeAudioTrack(muxer: Muxer<ArrayBufferTarget>, choice: AudioCh
 export async function runExport(job: ExportJob, onProgress: (p: number) => void, signal?: AbortSignal): Promise<ExportResult> {
   const r = new Renderer(true);
   // 3D 主體：先等 Three.js 與 3D 舞台就緒，避免第一幀（或單張 PNG）畫成「載入 3D 場景…」
-  await r.ready(job.subject);
+  if (job.film) await filmReady(r, job.film);
+  else await r.ready(job.subject);
   const cv = document.createElement('canvas');
   cv.width = job.w;
   cv.height = job.h;
   const ctx = cv.getContext('2d', { willReadFrequently: job.format === 'gif' })!;
-  const draw = (t: number) => r.render(ctx, job.w, job.h, { subject: job.subject, look: job.look, move: job.move, tune: job.tune, time: t, transparent: job.transparent });
-  const base = `style-fusion-${job.subject}`;
+  const tmp = document.createElement('canvas');
+  const film = job.film;
+  const draw = film
+    ? (t: number) => drawFilmFrame(r, ctx, job.w, job.h, film, t, tmp, { transparent: job.transparent })
+    : (t: number) => r.render(ctx, job.w, job.h, { subject: job.subject, look: job.look, move: job.move, tune: job.tune, time: t, transparent: job.transparent });
+  const base = job.name ?? `style-fusion-${job.subject}`;
   try {
     if (job.format === 'png') {
       draw(job.time ?? 0);
@@ -301,7 +312,7 @@ export async function runExport(job: ExportJob, onProgress: (p: number) => void,
   }
 }
 
-export function estimateFrames(job: Pick<ExportJob, 'subject' | 'move' | 'tune' | 'fps' | 'loops' | 'seconds'>) {
+export function estimateFrames(job: Pick<ExportJob, 'subject' | 'move' | 'tune' | 'fps' | 'loops' | 'seconds' | 'film'>) {
   return Math.max(1, Math.round(totalSeconds(job).total * job.fps));
 }
 

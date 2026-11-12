@@ -4,7 +4,7 @@
 import { clamp } from '../engine/util';
 import { stepToSec } from './songTime';
 import type { RenderOpts } from './chip';
-import { foldTail, freeverb, master, newStereo, removeMean, yieldNow, type Stereo } from './dsp';
+import { foldTail, keepTail, freeverb, master, newStereo, removeMean, yieldNow, type Stereo } from './dsp';
 import type { Song, Track, TrackRole } from './types';
 import { ROLE_MIX, SEND, ensureSamplesFor, pickDrum, voiceOf } from './sampled';
 import { XM_SYN_SCALE } from './xmCalibration';
@@ -574,7 +574,7 @@ export async function renderXm(song: Song, opts: RenderOpts): Promise<Stereo> {
     ext.l[i] += rv.l[i] * 0.55;
     ext.r[i] += rv.r[i] * 0.55;
   }
-  const out = foldTail(ext, n);
+  const out = opts.noFold ? keepTail(ext, n) : foldTail(ext, n);
   removeMean(out.l);
   removeMean(out.r);
   if (!opts.raw) master(out, 0.12);

@@ -3,7 +3,8 @@
 import type { Look, Move, SubjectId, Tune } from '../engine/types';
 import { subjectVersion } from '../engine/subjects';
 import { themes } from '../engine/themes';
-import { CueTracker } from './cues';
+import { CueTracker, type SfxSource } from './cues';
+import { levelMatched, realSfx, realSfxRev } from './realSfx';
 import type { Stereo } from './dsp';
 import { mixdown } from './mixdown';
 import type { AudioPlan } from './plan';
@@ -31,6 +32,9 @@ export interface ScenePatch {
   tune: Tune;
   look: Look;
   aspect: number;
+  /** 2.0 β：整支片子播放時，音效提示點換成整支片子的（cuesKey 變了才換） */
+  cues?: SfxSource;
+  cuesKey?: string;
 }
 
 class AudioEngine {
@@ -47,7 +51,7 @@ class AudioEngine {
   private prefs: AudioPrefs = { ...AUDIO_DEFAULT };
   private plan: AudioPlan | null = null;
   private scene: ScenePatch | null = null;
-  private tracker: CueTracker | null = null;
+  private tracker: SfxSource | null = null;
   private trackerKey: unknown[] = [];
   private pcm: Stereo | null = null;
   private pcmKey = '';
@@ -135,9 +139,9 @@ class AudioEngine {
     this.prefs = s.prefs;
     this.plan = s.plan;
     // 自訂主題的音效點來自主題檔：匯入、切換、刪除主題後要重新建立（themes.rev 每次變動都會加一）
-    const tk = [s.subject, s.move, s.tune, s.look, s.aspect, themes.rev(), subjectVersion()];
-    if (!this.tracker || tk.some((x, i) => x !== this.trackerKey[i])) {
-      this.tracker = new CueTracker(s.subject, s.move, s.tune, s.look, s.aspect);
+    const tk = s.cues ? ['film', s.cuesKey] : [s.subject, s.move, s.tune, s.look, s.aspect, themes.rev(), subjectVersion()];
+    if (!this.tracker || tk.length !== this.trackerKey.length || tk.some((x, i) => x !== this.trackerKey[i])) {
+      this.tracker = s.cues ?? new CueTracker(s.subject, s.move, s.tune, s.look, s.aspect);
       this.trackerKey = tk;
     }
     this.applyGains();
@@ -265,9 +269,7 @@ class AudioEngine {
     if (!this.ctx) return;
     const p = this.prefs;
     if (p.on && p.sfx && this.plan?.pack && this.tracker && playing && this.lastPlaying && this.lastT >= 0 && Math.abs(t - this.lastT) < 0.25 && this.ctx.state === 'running') {
-      const u0 = this.tracker.u(this.lastT);
-      const u1 = this.tracker.u(t);
-      for (const c of this.tracker.scan(u0, u1)) this.playSfx(c.kind, c.k, rate);
+      for (const c of this.tracker.hits(this.lastT, t)) this.playSfx(c.kind, c.k, rate);
     }
     this.lastT = t;
     this.lastPlaying = playing;
@@ -328,10 +330,11 @@ class AudioEngine {
   private sfxBuffer(kind: SfxKind, variant: number): AudioBuffer | null {
     const pack = this.plan?.pack;
     if (!this.ctx || !pack) return null;
-    const key = `${pack}|${kind}|${variant}`;
+    const real = realSfx(kind);
+    const key = real ? `real${realSfxRev()}|${pack}|${kind}` : `${pack}|${kind}|${variant}`;
     let b = this.sfxCache.get(key);
     if (!b) {
-      const data = synthSfx(pack, kind, SAMPLE_RATE, variant);
+      const data = real ? levelMatched(real, synthSfx(pack, kind, SAMPLE_RATE, 0), `${pack}|${kind}`) : synthSfx(pack, kind, SAMPLE_RATE, variant);
       b = this.ctx.createBuffer(1, data.length, SAMPLE_RATE);
       b.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
       this.sfxCache.set(key, b);
@@ -462,6 +465,20 @@ class AudioEngine {
   }
 
   // ---------- 導出 ----------
+  /**
+   * 整支片子的音軌（2.0 β）：配樂（有收尾的不折回尾音、不循環，審查 R-16）＋每一場的音效。
+   * plan 是 film.ts 算好的配樂計畫；cues 是整支片子的提示點
+   */
+  async exportFilmMix(plan: AudioPlan, cues: SfxSource, seconds: number): Promise<Stereo> {
+    const p = this.prefs;
+    let bgm: Stereo | null = null;
+    if (p.bgm) {
+      const scored = !!plan.song.sections;
+      bgm = scored ? await renderAsync(plan.song, plan.scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, noFold: true }) : await this.renderFor(plan, plan.scheme).p;
+    }
+    return mixdown({ seconds, sr: SAMPLE_RATE, bgm, bgmVol: p.bgmVol, tracker: p.sfx ? cues : null, pack: plan.pack, sfxVol: p.sfxVol, loop: !plan.song.sections });
+  }
+
   /** 混出 seconds 秒的音訊（BGM＋音效），供 WAV／影片使用 */
   async exportMix(seconds: number): Promise<Stereo | null> {
     const p = this.prefs;
@@ -471,15 +488,25 @@ class AudioEngine {
     if (p.bgm && !got?.pcm) got = await this.ensurePcm();
     if (p.bgm && !got?.pcm) throw new Error('音樂還在準備，請等一下再導出一次');
     if (!this.scene || !this.tracker) return null;
+    // 審查 R-16：有收尾的配樂導出「整首」時不循環：用不折回尾音的版本，開頭不會帶著結尾的殘響
+    const song = got?.plan.song;
+    const once = !!song?.sections && seconds <= song.seconds * 1.01 + 0.05;
+    const bgm = !p.bgm ? null : once && got ? await renderAsync(got.plan.song, got.plan.scheme, { sr: SAMPLE_RATE, seed: this.prefs.seed, noFold: true }) : (got?.pcm ?? null);
     return mixdown({
       seconds,
       sr: SAMPLE_RATE,
-      bgm: p.bgm ? (got?.pcm ?? null) : null,
+      loop: !once,
+      bgm,
       bgmVol: p.bgmVol,
       tracker: p.sfx ? this.tracker : null,
       pack: this.plan?.pack ?? null,
       sfxVol: p.sfxVol,
     });
+  }
+
+  /** 目前的偏好（導出視窗判斷有沒有聲音用） */
+  soundPrefs(): AudioPrefs {
+    return this.prefs;
   }
 }
 

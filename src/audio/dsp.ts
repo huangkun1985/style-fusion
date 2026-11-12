@@ -219,6 +219,25 @@ export function foldTail(s: Stereo, n: number): Stereo {
   return out;
 }
 
+/**
+ * 不折回（審查 R-16）：保留曲長之後的尾音，裁到尾音比峰值低 70 dB 的地方（再多留約 50 毫秒）。
+ * 給有收尾的配樂導出用；循環播放仍用 foldTail。
+ */
+export function keepTail(s: Stereo, n: number): Stereo {
+  const total = s.l.length;
+  let peak = 1e-9;
+  for (let i = 0; i < total; i++) peak = Math.max(peak, Math.abs(s.l[i]), Math.abs(s.r[i]));
+  const floor = peak * 3.2e-4;
+  let end = n;
+  for (let i = total - 1; i >= n; i--) {
+    if (Math.abs(s.l[i]) > floor || Math.abs(s.r[i]) > floor) {
+      end = i + 1;
+      break;
+    }
+  }
+  return { l: s.l.slice(0, Math.min(total, end + 2048)), r: s.r.slice(0, Math.min(total, end + 2048)) };
+}
+
 /** 響度正規化到目標 RMS，並限制峰值 */
 export function master(s: Stereo, targetRms = 0.13, ceiling = 0.97): { peak: number; rms: number } {
   let sum = 0;

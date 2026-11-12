@@ -2,7 +2,7 @@
 // 同一份歌曲也能導出標準 MIDI 檔（見 midi.ts），在任何 GM 音源裡播放。
 import { clamp } from '../engine/util';
 import type { RenderOpts } from './chip';
-import { Noise, Svf, activeLoudness, biquad, compress, foldTail, freeverb, master, newStereo, noteSpan, panGains, removeMean, yieldNow, type Stereo } from './dsp';
+import { Noise, Svf, activeLoudness, biquad, compress, foldTail, keepTail, freeverb, master, newStereo, noteSpan, panGains, removeMean, yieldNow, type Stereo } from './dsp';
 import { CALIBRATION } from './calibration';
 import { MIX_TARGET } from './mixTargets';
 import { ROLE_MIX, SEND, ensureSamplesFor, sampledDrum, sampledModel } from './sampled';
@@ -728,7 +728,7 @@ async function renderPolished(song: Song, opts: RenderOpts, sr: number, n: numbe
     const L = activeLoudness(buf, sr);
     let k = 1;
     if (probe) probe.push({ role: r, L, genre: song.genre });
-    else if (L > -100) k = Math.pow(10, Math.max(-9, Math.min(9, MIX_TARGET[r] + (song.bed && r === 'perc' ? -3 : 0) - L)) / 20);
+    else if (L > -100) k = Math.pow(10, Math.max(-9, Math.min(9, MIX_TARGET[r] + (song.bed && r === 'perc' ? -3 : 0) + Math.min(0, tr.trim ?? 0) - L)) / 20);
     for (let i = 0; i < buf.length; i++) {
       const v = buf[i] * k;
       if (v === 0) continue;
@@ -809,7 +809,7 @@ export async function renderGm(song: Song, opts: RenderOpts): Promise<Stereo> {
     dry.l[i] += rv.l[i] * 0.55;
     dry.r[i] += rv.r[i] * 0.55;
   }
-  const out = foldTail(dry, n);
+  const out = opts.noFold ? keepTail(dry, n) : foldTail(dry, n);
   removeMean(out.l);
   removeMean(out.r);
   if (!opts.raw) master(out, 0.12);

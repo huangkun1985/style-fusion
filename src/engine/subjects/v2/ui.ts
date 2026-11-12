@@ -9,6 +9,7 @@ import type { Cue } from '../../../audio/types';
 import { mix } from '../../color';
 import { clamp, lerp, TAU } from '../../util';
 import type { Subject } from '../types';
+import { content } from '../../content';
 
 const SC = 0.41; // 1 pt = 0.41 設計單位（390 pt 寬的螢幕 → 約 160 單位；手機高約 350，上下留白）
 const SW = 390;
@@ -287,7 +288,7 @@ export const ui2: Subject = {
 
     // ── 標題列：大標題＋圓形加號鈕
     group(M.tw(0.04 + M.stag(0), 0.2 + M.stag(0), 'o'), 40, () => {
-      T('Statistics', 20, 90, 26, 'ink');
+      T(content('ui', 'title', 'Statistics'), 20, 90, 26, 'ink');
       S.circle(352, 90, 19, soft, FL);
       line([344, 90, 360, 90], 'ink', 1.9);
       line([352, 82, 352, 98], 'ink', 1.9);
@@ -298,7 +299,7 @@ export const ui2: Subject = {
       card(195, 155, 350, 58, 12);
       S.rect(52, 155, 38, 38, 9, 'p', { shadow: false, hl: false });
       T('CA', 52, 155, 14, 'light', { align: 'center' });
-      T('Computer Architecture ...', 80, 147, 14.5, 'ink');
+      T(content('ui', 'course', 'Computer Architecture ...'), 80, 147, 14.5, 'ink');
       T('CLASS A', 80, 167, 10, 'ink', { a: 0.5 });
       arrowD(346, 155, 5.5, 'ink', 0.7);
     });
@@ -315,7 +316,7 @@ export const ui2: Subject = {
       const wd: number[] = [41, 220];
       for (let q = 0; q <= 8; q++) wd.push(41 + Math.cos(-Math.PI / 2 + (q / 8) * 2.1) * 7, 220 + Math.sin(-Math.PI / 2 + (q / 8) * 2.1) * 7);
       S.poly(wd, 'p', FL);
-      T('Overall Presence', 56, 220, 11.5, 'p');
+      T(content('ui', 'metric', 'Overall Presence'), 56, 220, 11.5, 'p');
       S.rect(195, 238, 350, 0.9, 0, hair, FL);
       const n = (85 * M.tw(0.14, 0.4, 'io')).toFixed(0);
       T(`${n}%`, 36, 272, 30, 'ink');
@@ -381,7 +382,7 @@ export const ui2: Subject = {
       if (i < 2) {
         doc(48, 0, i === 0 ? pal.p : mute);
         T(i === 0 ? '85% submitted' : '65% submitted', 76, -10, 11, i === 0 ? 'q' : amber);
-        T(i === 0 ? 'Final Project Presentation' : 'Create a website template', 76, 9, 13.5, 'ink');
+        T(i === 0 ? content('ui', 'task1', 'Final Project Presentation') : content('ui', 'task2', 'Create a website template'), 76, 9, 13.5, 'ink');
         avatar(314, 0, 11, tint2, 'J', pal.p);
         avatar(330, 0, 11, i === 0 ? slateD : slateL, 'M', 'card');
         S.circle(352, 0, 11, soft, FL);
@@ -448,7 +449,7 @@ export const ui2: Subject = {
         S.alpha = baseA * (1 - exitP) * ca;
         S.circle(45, cy, 14, 'q', { hl: false, shadow: false });
         line([38.5, cy, 43.5, cy + 5, 52, cy - 4.5], 'light', 2.6);
-        T('Style applied', 68, cy - 6.5, 13.5, 'light');
+        T(content('ui', 'toast', 'Style applied'), 68, cy - 6.5, 13.5, 'light');
         if (det > 0.5) T('Just now · Statistics', 68, cy + 8.5, 10, 'light', { a: 0.55 });
       }
     }

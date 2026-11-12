@@ -10,6 +10,7 @@ import { StarterModal } from './components/Starter';
 import { ThemeModal } from './components/ThemeModal';
 import { Toast, Segmented } from './components/ui';
 import { MobileBar, RightPanel, SceneStrip } from './components/Workspace';
+import { Timeline } from './components/Timeline';
 import { redo, undo } from './store/history';
 import { LibraryView, RecipesView, SavedView } from './components/Views';
 import { clock } from './engine/clock';
@@ -57,7 +58,7 @@ function MixerView() {
           <div className="scroll-y gutter-stable h-[176px] shrink-0 rounded-xl">
             <MixTray />
           </div>
-          <SceneStrip />
+          <Timeline />
         </section>
         <RightPanel advanced />
       </div>
@@ -78,7 +79,7 @@ function MixerView() {
           <div className="shrink-0">
             <MixTray />
           </div>
-          <SceneStrip />
+          <Timeline />
           <div className="flex h-[760px] shrink-0 flex-col">
             <RightPanel advanced collapsible={false} />
           </div>
@@ -98,7 +99,7 @@ function MixerView() {
             <Stage simple compact />
           </div>
         )}
-        <SceneStrip />
+        {advanced ? <Timeline /> : <SceneStrip />}
         {advanced ? (
           <>
             <MixTray />

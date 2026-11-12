@@ -6,7 +6,8 @@ import { MODE_NAME } from '../audio/theory';
 import { PIECES, PIECE_BY_ID, PIECE_GROUPS } from '../audio/classics';
 import { CueTracker } from '../audio/cues';
 import { audioEngine } from '../audio/engine';
-import { makeAudioFile, type AudioFileKind } from '../audio/files';
+import { makeAudioFile, stemsSupported, type AudioFileKind } from '../audio/files';
+import { RealSfxSection } from './RealSfx';
 import { GENRES } from '../audio/genres';
 import { SCHEME_INFO } from '../audio/render';
 import { PACK_INFO, SFX_KINDS } from '../audio/sfx';
@@ -500,15 +501,25 @@ export function SoundTab() {
         </div>
       </div>
 
+      {/* 真實音效（2.0 β） */}
+      <RealSfxSection />
+
       {/* 導出 */}
       <div>
         <SectionTitle>導出音訊</SectionTitle>
         <div className="grid grid-cols-2 gap-1.5">
           <ExportBtn busy={busy === 'wav'} onClick={() => void exportFile('wav')} title="WAV 混音" sub="音樂＋音效，約 8 秒以上" />
-          <ExportBtn busy={busy === 'bgm-wav'} onClick={() => void exportFile('bgm-wav')} title="WAV 循環" sub="只有音樂，可無縫循環" />
+          <ExportBtn busy={busy === 'bgm-wav'} onClick={() => void exportFile('bgm-wav')} title="WAV 循環" sub={plan.song.sections ? '只有音樂，含收尾的尾音' : '只有音樂，可無縫循環'} />
           <ExportBtn busy={busy === 'mid'} onClick={() => void exportFile('mid')} title="MIDI (.mid)" sub="標準 MIDI，GM 音色" />
           <ExportBtn busy={busy === 'xm'} onClick={() => void exportFile('xm')} title="XM 模組 (.xm)" sub="用 OpenMPT 等追蹤器開啟" />
-          <ExportBtn busy={busy === 'stems'} onClick={() => void exportFile('stems')} title="分軌 (.zip)" sub={busy === 'stems' && stemProg > 0 ? `渲染中 ${Math.round(stemProg * 100)}%` : '每個聲部一個 WAV＋MIDI'} />
+          <ExportBtn
+            busy={busy === 'stems'}
+            disabled={!stemsSupported(plan.scheme)}
+            onClick={() => void exportFile('stems')}
+            title="分軌 (.zip)"
+            sub={!stemsSupported(plan.scheme) ? '只支援 MIDI 方案' : busy === 'stems' && stemProg > 0 ? `渲染中 ${Math.round(stemProg * 100)}%` : '每個聲部一個 WAV＋MIDI'}
+            tip={stemsSupported(plan.scheme) ? '分軌：每個聲部一個等長的 WAV，加總就是混音。要進剪輯或編曲軟體再加工時用' : '分軌只支援「MIDI（真實樂器）」方案：其他方案單獨渲染一軌的聲音會和混音裡不同。要分軌請先把聲音方案換成 MIDI'}
+          />
         </div>
         <p className="mt-1.5 text-[11px] leading-relaxed text-fg-3">影片導出（MP4／WebM）時，會自動把這裡的音樂與音效一起封裝進去。分軌是每個聲部各一個等長的 WAV（含各自的殘響），疊在一起就是混音，方便進剪輯或編曲軟體再加工。.xm 的速度必須是整數 BPM，所以長度可能和動畫有 0.5% 內的差異。</p>
       </div>
@@ -579,9 +590,9 @@ function AutoRow({ on, onClick, now, label }: { on: boolean; onClick: () => void
   );
 }
 
-function ExportBtn({ title, sub, onClick, busy }: { title: string; sub: string; onClick: () => void; busy: boolean }) {
+function ExportBtn({ title, sub, onClick, busy, disabled, tip }: { title: string; sub: string; onClick: () => void; busy: boolean; disabled?: boolean; tip?: string }) {
   return (
-    <button type="button" onClick={onClick} disabled={busy} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-panel-2 p-2 text-left transition-colors hover:border-line-2 disabled:opacity-60">
+    <button type="button" onClick={onClick} disabled={busy || disabled} title={tip} className="flex items-center justify-between gap-2 rounded-lg border border-line bg-panel-2 p-2 text-left transition-colors hover:border-line-2 disabled:opacity-60">
       <span className="min-w-0">
         <span className="block text-[13px] font-semibold">{title}</span>
         <span className="block truncate text-[11px] text-fg-3">{sub}</span>

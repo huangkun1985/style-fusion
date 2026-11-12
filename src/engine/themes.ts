@@ -660,9 +660,39 @@ try {
   /* 存的資料壞了：當作沒有 */
 }
 
+/** 2.0 β：畫別的場景時暫時換成那一場的主題（不動清單、不通知、不存）；見 renderer 的 FrameSpec.scope */
+let scopedTheme: Theme | null | undefined;
+export function withTheme<T>(t: Theme | null | undefined, fn: () => T): T {
+  if (t === undefined) return fn();
+  const prev = scopedTheme;
+  scopedTheme = t;
+  try {
+    return fn();
+  } finally {
+    scopedTheme = prev;
+  }
+}
+
+/** 解析過的主題 JSON（整支片子每幀都要用，解析一次就記住） */
+const parsedCache = new Map<string, Theme | null>();
+export function themeOf(json: string | undefined | null): Theme | null {
+  if (!json) return null;
+  let t = parsedCache.get(json);
+  if (t === undefined) {
+    try {
+      t = parseTheme(json);
+    } catch {
+      t = null;
+    }
+    if (parsedCache.size > 24) parsedCache.clear();
+    parsedCache.set(json, t);
+  }
+  return t;
+}
+
 export const themes = {
   list: (): ThemeInfo[] => items.map((x) => ({ id: x.id, theme: x.theme })),
-  current: (): Theme | null => items.find((x) => x.id === currentId)?.theme ?? null,
+  current: (): Theme | null => (scopedTheme !== undefined ? scopedTheme : (items.find((x) => x.id === currentId)?.theme ?? null)),
   currentId: () => currentId,
   /** 目前主題的原始 JSON（專案存檔、復原歷史、給 Agent 修改用） */
   currentJson: (): string | null => items.find((x) => x.id === currentId)?.json ?? null,

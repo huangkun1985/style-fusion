@@ -11,10 +11,13 @@ import { saveBlob, stamp } from '../lib/platform';
 import { toggleSound } from '../lib/sound';
 import { addStampNow } from '../agent/session';
 import { useLookMove } from '../store/hooks';
+import { drawFilmFrame, filmModel, mmss, shotAt, type FilmModel } from '../store/film';
 import { useStore, type Aspect } from '../store/store';
 import { SUBJECT_ICON } from './icons';
 import { StyleWall } from './StyleWall';
 import { IconBtn, Segmented } from './ui';
+import { MOTION_MAP } from '../data/motion';
+import { VISUAL_MAP } from '../data/visual';
 
 /** fit（填滿）的比例會由舞台依實際大小即時更新；導出與截圖用的是更新後的值 */
 export const ASPECT: Record<Aspect, number> = { fit: 16 / 9, '16:9': 16 / 9, '4:3': 4 / 3, '1:1': 1, '9:16': 9 / 16 };
@@ -46,6 +49,8 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
   const path = useStore((s) => s.path);
   const grid4 = useStore((s) => s.grid4);
   const quality = useStore((s) => s.quality);
+  // 2.0 β：播放整支片子時，舞台畫的是片子時間 clock.t 落在的那一場（淡轉場時兩場疊在一起）
+  const film = useStore((s) => (s.filmPlay ? filmModel(s) : null));
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -69,9 +74,18 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
     window.clearTimeout(ctlTimer.current);
     ctlTimer.current = window.setTimeout(() => setCtl(false), 2600);
   };
+  // 全螢幕展示（2.0 β）：有兩場以上就自動播整支片子；離開時回到原本的模式
+  const filmBefore = useRef<boolean | null>(null);
   const enterFs = async () => {
     const el = wrapRef.current;
     if (!el) return;
+    const s0 = useStore.getState();
+    filmBefore.current = s0.filmPlay;
+    if (s0.scenes.length > 1 && !s0.filmPlay && !s0.hist.previewing && !s0.hist.showingA) {
+      useStore.setState({ filmPlay: true, wall: false });
+      clock.set(0);
+      clock.play(true);
+    }
     setFs('css');
     showCtl();
     try {
@@ -80,7 +94,15 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
       /* 被拒絕：維持鋪滿視窗 */
     }
   };
+  const restoreFilm = () => {
+    if (filmBefore.current === false && useStore.getState().filmPlay) {
+      useStore.setState({ filmPlay: false });
+      clock.set(0);
+    }
+    filmBefore.current = null;
+  };
   const exitFs = async () => {
+    restoreFilm();
     if (document.fullscreenElement) {
       try {
         await document.exitFullscreen();
@@ -94,10 +116,22 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
     const toggle = () => void (fsRef.current === 'off' ? enterFs() : exitFs());
     const onChange = () => {
       if (document.fullscreenElement) setFs('native');
-      else setFs((f) => (f === 'native' ? 'off' : f));
+      else
+        setFs((f) => {
+          if (f === 'native') restoreFilm();
+          return f === 'native' ? 'off' : f;
+        });
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && fsRef.current === 'css') setFs('off');
+      if (e.key === 'Escape' && fsRef.current === 'css') {
+        restoreFilm();
+        setFs('off');
+      }
+      // 全螢幕時 S 開關規格卡
+      if ((e.key === 's' || e.key === 'S') && fsRef.current !== 'off' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const s1 = useStore.getState();
+        s1.set({ specCard: !s1.specCard });
+      }
     };
     window.addEventListener('sf:fullscreen', toggle);
     document.addEventListener('fullscreenchange', onChange);
@@ -109,8 +143,8 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
       window.clearTimeout(ctlTimer.current);
     };
   }, []);
-  const st = useRef({ look, move, tune, subject, onion, path, grid4, box, quality, dirty: true });
-  st.current = { look, move, tune, subject, onion, path, grid4, box, quality, dirty: true };
+  const st = useRef<{ look: typeof look; move: typeof move; tune: typeof tune; subject: SubjectId; onion: boolean; path: boolean; grid4: boolean; box: typeof box; quality: 0 | 1 | 2; dirty: boolean; film: FilmModel | null }>({ look, move, tune, subject, onion, path, grid4, box, quality, dirty: true, film });
+  st.current = { look, move, tune, subject, onion, path, grid4, box, quality, dirty: true, film };
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -143,6 +177,7 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
   useEffect(() => {
     const r = new Renderer(true);
     r.onThreeReady = () => (st.current.dirty = true);
+    const tmp = document.createElement('canvas');
     let raf = 0;
     let lastT = -1;
     const loop = (now: number) => {
@@ -154,7 +189,22 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
       s.dirty = false;
       const dpr = Math.min(2, window.devicePixelRatio || 1) * QUALITY[s.quality];
       const base: Omit<FrameSpec, 'subject'> = { look: s.look, move: s.move, tune: s.tune, time: clock.t, onion: s.onion, live: true };
-      if (!s.grid4) {
+      if (s.film) {
+        const cv = canvasRef.current;
+        if (!cv) return;
+        let W = Math.round(s.box.w * dpr);
+        let H = Math.round(s.box.h * dpr);
+        const k = Math.sqrt(Math.min(1, MAX_PX / (W * H)));
+        W = Math.round(W * k);
+        H = Math.round(H * k);
+        if (cv.width !== W) cv.width = W;
+        if (cv.height !== H) cv.height = H;
+        const ctx = cv.getContext('2d');
+        if (!ctx) return;
+        drawFilmFrame(r, ctx, W, H, s.film, clock.t, tmp, { live: true });
+        const ov = overlayRef.current;
+        if (ov) ov.getContext('2d')?.clearRect(0, 0, ov.width, ov.height);
+      } else if (!s.grid4) {
         const cv = canvasRef.current;
         if (!cv) return;
         let W = Math.round(s.box.w * dpr);
@@ -229,7 +279,7 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
         style={fs !== 'off' ? { cursor: ctl ? undefined : 'none' } : fill ? undefined : aspect === 'fit' ? { height: compact ? '36vh' : '62vh' } : { aspectRatio: String(ASPECT[aspect]), maxHeight: compact ? '36vh' : '62vh' }}
       >
         <div className={`relative overflow-hidden bg-stage ${fs !== 'off' ? '' : 'rounded-xl shadow-[var(--shadow)] ring-1 ring-line'}`} style={{ width: box.w, height: box.h }}>
-          {wall ? null : !grid4 ? (
+          {wall ? null : !grid4 || film ? (
             <>
               <canvas ref={canvasRef} className="block size-full" aria-label="風格混合即時預覽" role="img" />
               <canvas ref={overlayRef} className="pointer-events-none absolute inset-0 size-full" aria-hidden />
@@ -247,6 +297,7 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
             </div>
           )}
           {!wall && <StageBadges />}
+          {!wall && film && fs === 'off' && <FilmBadge film={film} />}
           {mixEmpty && (
             <div className="pointer-events-none absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-black/60 px-3 py-1 text-xs text-white">{simple ? '按播放列的「風格」挑一組，或按「重抽」' : '從左側風格庫點選，開始混合'}</div>
           )}
@@ -272,7 +323,8 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
             </div>
           )}
           {showingA && <div className="pointer-events-none absolute left-2 top-2 rounded-md border border-mot bg-black/70 px-2 py-0.5 text-[12px] font-semibold text-white">A（放開滑鼠回到現在的 B）</div>}
-          {fs !== 'off' && <FsBar visible={ctl} onExit={() => void exitFs()} />}
+          {fs !== 'off' && <FsBar visible={ctl} onExit={() => void exitFs()} film={film} />}
+          {fs !== 'off' && <SpecCard />}
           {!glOk && <div className="absolute left-2 bottom-2 rounded bg-danger/90 px-2 py-1 text-[11px] text-white">此瀏覽器不支援 WebGL2，後期特效已停用</div>}
         </div>
         {/* 風格牆蓋住整個舞台區（不只是畫面比例的那一塊）；主畫面的 canvas 拿掉，主渲染迴圈就不畫 */}
@@ -285,11 +337,40 @@ export function Stage({ fill = false, simple = false, compact = false }: { fill?
 }
 
 /** 全螢幕時浮在畫面下方的簡易控制：播放／暫停、聲音、離開；滑鼠不動 2.6 秒後淡出 */
-function FsBar({ visible, onExit }: { visible: boolean; onExit: () => void }) {
+function FsBar({ visible, onExit, film }: { visible: boolean; onExit: () => void; film: FilmModel | null }) {
   const soundOn = useStore((s) => s.audio.on);
+  const specCard = useStore((s) => s.specCard);
   const [playing, setPlaying] = useState(clock.playing);
   useEffect(() => clock.on(() => setPlaying(clock.playing)), []);
+  const barRef = useRef<HTMLDivElement>(null);
+  const infoRef = useRef<HTMLSpanElement>(null);
+  // 片子的進度條（底部 4 px，直線是場景交界）與場景名稱、時間：每幀直接改 DOM，不重繪元件
+  useEffect(() => {
+    if (!film) return;
+    let raf = 0;
+    const upd = () => {
+      raf = requestAnimationFrame(upd);
+      const t = ((clock.t % film.total) + film.total) % film.total;
+      if (barRef.current) barRef.current.style.width = `${(t / film.total) * 100}%`;
+      const sh = shotAt(film, t);
+      if (infoRef.current) infoRef.current.textContent = `${sh.index + 1}／${film.shots.length}　${sh.name}　${mmss(t)} / ${mmss(film.total)}`;
+    };
+    upd();
+    return () => cancelAnimationFrame(raf);
+  }, [film]);
   return (
+    <>
+    {film && (
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1 bg-white/15">
+        <div ref={barRef} className="absolute inset-y-0 left-0 bg-accent" />
+        {film.shots.slice(1).map((sh) => (
+          <span key={sh.id} className="absolute inset-y-0 w-px bg-black/70" style={{ left: `${(sh.start / film.total) * 100}%` }} />
+        ))}
+      </div>
+    )}
+    {film && (
+      <span ref={infoRef} className={`num pointer-events-none absolute left-4 top-4 rounded-md bg-black/60 px-2 py-1 text-[13px] text-white transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`} />
+    )}
     <div className={`absolute inset-x-0 bottom-4 flex justify-center transition-opacity duration-300 ${visible ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
       <div className="flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 text-white backdrop-blur">
         <button type="button" aria-label={playing ? '暫停' : '播放'} title={playing ? '暫停（空白鍵）' : '播放（空白鍵）'} onClick={() => clock.play()} className="flex size-9 items-center justify-center rounded-full hover:bg-white/15">
@@ -298,10 +379,63 @@ function FsBar({ visible, onExit }: { visible: boolean; onExit: () => void }) {
         <button type="button" aria-label={soundOn ? '關閉聲音' : '開啟聲音'} title={soundOn ? '關閉聲音（M）' : '開啟聲音（M）'} onClick={() => void toggleSound()} className="flex size-9 items-center justify-center rounded-full hover:bg-white/15">
           {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
+        <button
+          type="button"
+          aria-pressed={specCard}
+          title="規格卡（S）：在畫面右上角顯示色板、風格與速度。跟客戶或工程師講解這組風格時用"
+          onClick={() => useStore.getState().set({ specCard: !specCard })}
+          className={`flex h-9 w-12 items-center justify-center rounded-full text-[13px] hover:bg-white/15 ${specCard ? 'bg-white/20' : ''}`}
+        >
+          規格
+        </button>
         <button type="button" aria-label="離開全螢幕" title="離開全螢幕（Esc 或 F）" onClick={onExit} className="flex size-9 items-center justify-center rounded-full hover:bg-white/15">
           <Minimize size={18} />
         </button>
       </div>
+    </div>
+    </>
+  );
+}
+
+/** 整支片子播放中：左上角顯示現在是第幾場（每幀直接改 DOM） */
+function FilmBadge({ film }: { film: FilmModel }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const upd = () => {
+      raf = requestAnimationFrame(upd);
+      const sh = shotAt(film, clock.t);
+      if (ref.current) ref.current.textContent = `整支片子 · 第 ${sh.index + 1} 場 ${sh.name}`;
+    };
+    upd();
+    return () => cancelAnimationFrame(raf);
+  }, [film]);
+  return <span ref={ref} className="pointer-events-none absolute left-2 top-2 max-w-[60%] truncate rounded bg-black/60 px-1.5 py-0.5 text-[12px] text-white" />;
+}
+
+/** 全螢幕的規格卡（S）：目前場景的色板、風格、速度 */
+function SpecCard() {
+  const on = useStore((s) => s.specCard);
+  const { look, move } = useLookMove();
+  const v = useStore((s) => s.v);
+  const m = useStore((s) => s.m);
+  if (!on) return null;
+  const pal = look.pal as unknown as Record<string, unknown>;
+  const roles = ['bg', 'ink', 'a', 'b', 'c', 'd'].filter((k) => typeof pal[k] === 'string');
+  return (
+    <div className="pointer-events-none absolute right-4 top-4 w-[260px] rounded-xl bg-black/70 p-3 text-[12px] leading-5 text-white backdrop-blur">
+      <div className="mb-1.5 text-[13px] font-bold">規格</div>
+      <div className="mb-2 flex gap-1.5">
+        {roles.map((k) => (
+          <span key={k} className="flex flex-col items-center gap-0.5">
+            <span className="size-7 rounded-md ring-1 ring-white/30" style={{ background: pal[k] as string }} />
+            <span className="num text-[10px] opacity-80">{String(pal[k])}</span>
+          </span>
+        ))}
+      </div>
+      <div className="opacity-90">圖像：{v.map((x) => VISUAL_MAP[x.id]?.name ?? x.id).join('、') || '—'}</div>
+      <div className="opacity-90">動效：{m.map((x) => MOTION_MAP[x.id]?.name ?? x.id).join('、') || '—'}</div>
+      <div className="num opacity-90">速度 ×{move.speed.toFixed(2)}{move.fps ? ` · ${move.fps} fps 步進` : ''}</div>
     </div>
   );
 }
@@ -327,7 +461,8 @@ function Transport() {
   const set = useStore((s) => s.set);
   const showToast = useStore((s) => s.showToast);
   useStore((s) => s.themeRev); // 自訂主題的循環秒數會變
-  const L = loopSeconds(SUBJECTS[subject], move, tune);
+  const film = useStore((s) => (s.filmPlay ? filmModel(s) : null));
+  const L = film ? film.total : loopSeconds(SUBJECTS[subject], move, tune);
   const rangeRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLSpanElement>(null);
   const [playing, setPlaying] = useState(clock.playing);
@@ -453,7 +588,8 @@ function SimpleTransport() {
   const set = useStore((s) => s.set);
   const randomize = useStore((s) => s.randomize);
   useStore((s) => s.themeRev);
-  const L = loopSeconds(SUBJECTS[subject], move, tune);
+  const film = useStore((s) => (s.filmPlay ? filmModel(s) : null));
+  const L = film ? film.total : loopSeconds(SUBJECTS[subject], move, tune);
   const rangeRef = useRef<HTMLInputElement>(null);
   const timeRef = useRef<HTMLSpanElement>(null);
   const [playing, setPlaying] = useState(clock.playing);
@@ -479,7 +615,7 @@ function SimpleTransport() {
       <button type="button" aria-label={playing ? '暫停' : '播放'} title={`${playing ? '暫停' : '播放'}（空白鍵）。看動畫、停在某一格檢查細節時用`} onClick={() => clock.play()} className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg bg-raise text-fg">
         {playing ? <Pause size={17} /> : <Play size={17} />}
       </button>
-      <span ref={timeRef} className="num hidden w-[150px] shrink-0 text-[13px] text-fg-2 sm:inline" aria-label="目前時間／循環長度" />
+      <span ref={timeRef} className="num hidden w-[150px] shrink-0 text-[13px] text-fg-2 sm:inline" aria-label={film ? '整支片子的目前時間／總長' : '目前時間／循環長度'} />
       <input
         ref={rangeRef}
         id="timeline-simple"

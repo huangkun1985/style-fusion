@@ -50,8 +50,15 @@ function patchFor(sc: Scene, s: St) {
   };
 }
 
-/** 一個場景的長度（秒）：目前場景用即時內容，其他的用存著的 */
+/** 一個場景的長度（秒）：設了長度（2.0 β）就用它；否則是一個動畫循環（目前場景用即時內容，其他的用存著的）。
+ *  整支片子裡實際放多久還要吸到小節線，看 film.ts 的 filmModel */
 export function sceneSeconds(sc: Scene, s: St = useStore.getState()): number {
+  if (sc.dur) return sc.dur;
+  return loopOf(sc, s);
+}
+
+/** 一個場景的一個動畫循環（秒） */
+export function loopOf(sc: Scene, s: St = useStore.getState()): number {
   const live = sc.id === s.activeScene;
   const subject = live ? s.subject : sc.mix.subject;
   const tune = live ? s.tune : sc.mix.tune;

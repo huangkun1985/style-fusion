@@ -159,6 +159,9 @@ export interface Track {
   notes: NoteEv[];
   pan: number;
   gain: number;
+  /** 審查 R-02：這一軌整體要比精修的目標電平低多少（dB，≤ 0）。編排把整軌收小時寫在這裡；精修逐軌對齊響度時加上去，
+   *  不然精修會把整軌拉回目標、抵銷編排的收小。沒有精修時不看它（收小已經在力度裡） */
+  trim?: number;
 }
 
 export interface ChordInfo {

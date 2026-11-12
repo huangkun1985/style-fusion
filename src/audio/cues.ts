@@ -12,7 +12,15 @@ export function previewEnv(look: Look, aspect = 16 / 9): Env {
   return { Wu, Hu, u: 1, look, detail: look.detail, thumb: false, W: Wu, H: Hu };
 }
 
-export class CueTracker {
+/** 音效提示點的來源：一個場景（CueTracker）或整支片子（store/film.ts 的 FilmCues） */
+export interface SfxSource {
+  /** 時間從 t0 走到 t1（秒）經過的提示點 */
+  hits(t0: number, t1: number): Cue[];
+  /** [0, seconds) 內所有提示點的觸發時間（離線混音用） */
+  timeline(seconds: number): { t: number; cue: Cue }[];
+}
+
+export class CueTracker implements SfxSource {
   readonly L: number;
   readonly cues: Cue[];
   private evU: number[];
@@ -39,6 +47,10 @@ export class CueTracker {
   /** 時間 t（秒）對應的動畫循環位置，包含停格、慢放、往返等時間重映射 */
   u(t: number): number {
     return new MotionCtx(this.move, this.L, t, this.tune.seed, this.evU, this.key).u;
+  }
+
+  hits(t0: number, t1: number): Cue[] {
+    return this.scan(this.u(t0), this.u(t1));
   }
 
   /** 從 u0 走到 u1 之間經過的提示點 */

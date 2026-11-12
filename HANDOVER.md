@@ -1,7 +1,10 @@
 # Style Fusion 交接文件（Hand over）
 
 > 寫給**在新的 session 接手這個專案的人（或新的 Claude）**。
-> ## 🆕 2026-11-12：2.0 α3 風格牆與場景完成（v2.0.0-alpha.3，已提交並推送）
+> ## 🆕 2026-11-12：2.0 β 進階與交付完成（v2.0.0-beta.1，**沒有提交**）
+> **新 session 先讀 `docs/交接-2.0-beta1後.md`，下一階段用 `docs/下個session的提示詞-2.0-正式.md`（先請使用者照 α 與 β 兩份驗收清單點，不要先寫程式）。** 驗收：`docs/驗收報告-v2.0.0-beta.1.md`。架構見第 6.10 節。使用者說「提交」才 commit。
+>
+> ## 2026-11-12：2.0 α3 風格牆與場景完成（v2.0.0-alpha.3，已提交並推送）
 > **新 session 先讀 `docs/交接-2.0-alpha3後.md`，下一階段用 `docs/下個session的提示詞-2.0-β.md`（先整理驗收清單給使用者，不要先寫程式）。** 驗收：`docs/驗收報告-v2.0.0-alpha.3.md`。架構見第 6.9 節。
 >
 > ## 2026-11-12：2.0 α2 Agent 完成（v2.0.0-alpha.2）
@@ -229,6 +232,15 @@ v1 檔案**不要改**（使用者要比較新舊）；改設計請改 v2。新�
 - **內容欄位**：`engine/content.ts` 的 `CONTENT_FIELDS`（目前只有 type v2、logo）、`content(主體, 鍵, 預設)` 給主體畫圖時讀、`setContent()` 由 store 訂閱同步。存在 `SceneMix.content`。v1 一律沒有（`fieldsFor`）。
 - **打字算一步**：`history.beginGesture()`（聚焦）／`endGesture()`（離開）。
 - **MIDI**：專案的 `midi`（base64）；`persist.parseProject()` 在檢查場景之前先放回 MIDI。
+
+### 6.10 整支片子、風格包、真實音效（β）
+- **整支片子**：`store/film.ts` 的 `filmModel(state)`（有快取）從 `stashActive()` 的場景算出每一場的開始、長度（`Scene.dur` 或一個循環，再吸到小節線）、段落、畫面規格（含 `scope`）與整支的配樂計畫（第 1 場的音樂設定＋`PlanInput.film`）。`filmAt(model, t)`：片子時間 → 哪一場、局部時間；淡轉場時兩場與不透明度。`drawFilmFrame` 畫一格。store 的 `filmPlay` 為真時，`Stage` 的渲染迴圈畫整支、播放列用整支的長度、`AudioBridge` 把引擎換成整支的配樂與 `FilmCues`。
+- **別的場景的內容**：`FrameSpec.scope = { content, theme }`；`renderer.render` 用 `inScope` 暫時換上（`content.ts` 的 `withContent`、`themes.ts` 的 `withTheme`），畫完放回。縮圖（`ThumbSpec.scope`）、風格包、整支片子都靠它。**目前場景不要給 scope**（它的內容在全域那一份，Agent 預覽也是改那一份）。
+- **時間軸**：`components/Timeline.tsx`（進階模式取代場景帶）。編輯函式在 `film.ts`（`setSceneDur`、`setSceneTrans`、`setFilm`、`addMarker`…），都是一般的 store 變動，所以都進復原歷史（`history.ts` 的文件多了 `film`、`sfxMap`）。
+- **導出**：`ExportJob.film` → `runExport` 用 `drawFilmFrame`；音軌 `audioEngine.exportFilmMix(plan, cues, 秒)`（有收尾的配樂用 `noFold`、不循環）。風格包 `lib/stylePack.ts`（`ZipStream` 串流打包）。
+- **真實音效**：伺服器 `scripts/agent-bridge.ts` 的 `sfx-search`（讀 Freesound 搜尋頁，`parseFreesound`）與 `sfx-fetch`（只代抓 `cdn.freesound.org/previews/`），和 Agent 共用通行碼；前端 `agent/bridge.ts` 的 `bridgePost`。`audio/realSfx.ts`：修剪、對齊、WAV 編解碼、`setRealSfx`（AudioBridge 同步）、`realSfx(kind)`（`engine.sfxBuffer` 與 `mixdown` 優先用它）。資料在 `Project.sounds`／`sfxMap`（逐欄檢查在 `project.ts`）。介面 `components/RealSfx.tsx`。
+- **審查**：R-02 `Track.trim`（`arrange.ts` 寫、`gm.ts` 精修對齊時加）；R-15 `stemsSupported`；R-16 `RenderOpts.noFold`＋`dsp.keepTail`。
+- **改 vite 外掛（agent-bridge）要重開開發伺服器**，網頁端的 `import()` 才拿得到新的模組。
 
 ## 7. 常見工作怎麼做
 

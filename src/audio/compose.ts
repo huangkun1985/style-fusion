@@ -6,7 +6,7 @@ import { getImportedMidi, songFromMidi } from './midiImport';
 import { DRUMS, DRUM_NOTE, GENRES, KIT_BY_DRUMS, type DrumName, type GenreSpec, type HookFamily, type RhythmKind } from './genres';
 import { MODE_NAME, SCALES, chordDegrees, chordLabel, chordPitches, nearestDegree, scaleNote, voice, type Mode } from './theory';
 import { applyArrangement, finalChord, humanize, planSections } from './arrange';
-import { NOTE_NAMES, type ArrShape, type ChordInfo, type GenreId, type NoteEv, type Section, type Song, type Track, type TrackRole } from './types';
+import { NOTE_NAMES, type ArrShape, type ChordInfo, type GenreId, type NoteEv, type Section, type SectionKind, type Song, type Track, type TrackRole } from './types';
 
 // ---------- 與動畫對齊 ----------
 export interface LoopPlan {
@@ -743,8 +743,18 @@ export interface ComposeOpts {
   arrange?: { len: number; shape: ArrShape };
   /** 墊底（不搶口播）：拿掉主旋律與副旋律、琶音收小、鼓只留大鼓與踩鈸 */
   bed?: boolean;
+  /** 整支片子的配樂（2.0 β，F10）：每個場景一個段落（bars 小節、kind 段落種類），速度固定為 bpm。有設定就不看 arrange */
+  film?: { bpm: number; parts: { bars: number; kind: SectionKind; name: string }[] };
   /** 精修（1.4.0）：力度微調；並讓渲染器做力度相關的起音、逐軌響度對齊與效果鏈 */
   polish?: boolean;
+}
+
+/** 自動作曲會用的速度與拍號（不和動畫對齊時）：整支片子要先知道一小節多長，才能把場景邊緣吸到小節線 */
+export function tempoFor(o: Pick<ComposeOpts, 'genre' | 'seed' | 'tempo' | 'bpmMul' | 'energyMul'>): { bpm: number; meter: 3 | 4 } {
+  const spec = GENRES[o.genre];
+  const rnd = rng(seedOf(o.seed, strSeed(o.genre) & 0xffff, 5));
+  const target = lerp(spec.bpm[0], spec.bpm[1], rnd()) * o.tempo * (o.bpmMul ?? 1);
+  return { bpm: clamp(target, 52, 196), meter: spec.meter ?? 4 };
 }
 
 export function composeSong(o: ComposeOpts): Song {
@@ -759,7 +769,8 @@ export function composeSong(o: ComposeOpts): Song {
   const meter = spec.meter ?? 4;
   const spb = meter === 3 ? 12 : 16;
   const target = lerp(spec.bpm[0], spec.bpm[1], rnd()) * o.tempo * (o.bpmMul ?? 1);
-  const plan = planLoop(o.animSeconds, target, meter, o.sync, !!o.preferLock);
+  const plan = o.film ? { bars: o.film.parts.reduce((a, x) => a + x.bars, 0), bpm: o.film.bpm, animLoops: 0, synced: false, beatLocked: false } : planLoop(o.animSeconds, target, meter, o.sync, !!o.preferLock);
+  const scored = !!(o.arrange || o.film);
   const key = o.key >= 0 ? o.key : spec.keys[Math.floor(rnd() * spec.keys.length)];
   const mode = spec.modes[Math.floor(rnd() * spec.modes.length)];
   const prog = spec.progs[Math.floor(rnd() * spec.progs.length)];
@@ -768,7 +779,7 @@ export function composeSong(o: ComposeOpts): Song {
   let animLoops = plan.animLoops;
   // 配樂模式：長度約 arrange.len 秒、至少 4 小節。和動畫對齊時，整首仍要是動畫循環的整數倍：
   // 一個音樂循環是 plan.bars 小節 = k 次動畫循環，所以最小的單位是 plan.bars / gcd(plan.bars, k) 小節
-  if (o.arrange) {
+  if (o.arrange && !o.film) {
     const barSec = (60 / plan.bpm) * meter;
     if (plan.synced) {
       const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
@@ -802,7 +813,7 @@ export function composeSong(o: ComposeOpts): Song {
     chords.push(row);
   }
   // 配樂收尾：倒數第二小節屬和弦、最後一小節主和弦（終止式）
-  if (o.arrange) {
+  if (scored) {
     const one = (degree: number): BarChord[] => {
       const pitches = chordPitches(key, mode, degree, spec.chordKind, 48);
       return [{ degree, start: 0, len: spb, pitches, rootPc: chordLabel(pitches).root }];
@@ -852,8 +863,15 @@ export function composeSong(o: ComposeOpts): Song {
   // 段落編排（配樂模式）或墊底；精修再加力度微調
   let final: Track[] = tracks;
   let sections: Section[] | undefined;
-  if (o.arrange) {
-    sections = planSections(bars, o.arrange.shape);
+  if (scored) {
+    if (o.film) {
+      sections = [];
+      let b0 = 0;
+      for (const part of o.film.parts) {
+        sections.push({ kind: part.kind, name: part.name, bar: b0, bars: part.bars });
+        b0 += part.bars;
+      }
+    } else sections = planSections(bars, o.arrange!.shape);
     const ac = { spb, bars, sections, bed: !!o.bed, cadence: true };
     final = applyArrangement(tracks, ac);
     const tonic = chords[bars - 1][0];
@@ -867,7 +885,7 @@ export function composeSong(o: ComposeOpts): Song {
   const stepSec = 60 / plan.bpm / 4;
   const steps = bars * spb;
   return {
-    title: `${spec.name}${o.arrange ? '配樂' : ''} · ${NOTE_NAMES[key]} ${MODE_NAME[mode]} · ${Math.round(plan.bpm)} BPM`,
+    title: `${spec.name}${scored ? '配樂' : ''} · ${NOTE_NAMES[key]} ${MODE_NAME[mode]} · ${Math.round(plan.bpm)} BPM`,
     genre: o.genre,
     bpm: plan.bpm,
     meter,

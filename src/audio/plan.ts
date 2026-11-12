@@ -4,7 +4,7 @@ import { loopSeconds } from '../engine/loop';
 import { SUBJECTS } from '../engine/subjects';
 import type { Move, SubjectId, Tune } from '../engine/types';
 import { PIECE_BY_ID } from './classics';
-import { composeSong } from './compose';
+import { composeSong, type ComposeOpts } from './compose';
 import { getImportedMidi, hasImportedMidi } from './midiImport';
 import { GENRES } from './genres';
 import { profileFor, type MusicProfile } from './profile';
@@ -38,6 +38,8 @@ export interface PlanInput {
   prefs: AudioPrefs;
   /** 尚未套用「節拍連動」的動效（用來算循環長度） */
   baseMove: Move;
+  /** 整支片子的配樂（2.0 β）：每個場景一段；只對自動作曲有效（名曲與匯入的 MIDI 照原曲循環） */
+  film?: ComposeOpts['film'];
 }
 
 const own = (o: object, k: unknown) => typeof k === 'string' && Object.hasOwn(o, k);
@@ -93,9 +95,10 @@ export function planAudio(i: PlanInput): AudioPlan {
   const preferLock = baseMove.beat > 0.05 || baseMove.zoomPunch > 0.05;
   // 配樂模式與墊底只用在自動作曲（名曲與匯入的 MIDI 照原曲）；精修對所有歌都有效
   const generated = !imp && !piece;
-  const arrange = generated && prefs.arrange ? { len: prefs.arrLen, shape: prefs.arrShape } : undefined;
+  const film = generated ? i.film : undefined;
+  const arrange = generated && prefs.arrange && !film ? { len: prefs.arrLen, shape: prefs.arrShape } : undefined;
   const bed = generated && prefs.bed;
-  const songKey = [genre, prefs.seed, prefs.sync, r3(prefs.tempo), prefs.key, r3(L), r3(prof.tempoMul), r3(prof.energyMul), preferLock, imp ? `import${imp.rev}:${prefs.midiStart}:${prefs.midiBars}` : (piece?.id ?? ''), arrange ? `arr${arrange.len}${arrange.shape}` : '', bed ? 'bed' : '', prefs.polish ? 'p' : ''].join('|');
+  const songKey = [genre, prefs.seed, prefs.sync, r3(prefs.tempo), prefs.key, r3(L), r3(prof.tempoMul), r3(prof.energyMul), preferLock, imp ? `import${imp.rev}:${prefs.midiStart}:${prefs.midiBars}` : (piece?.id ?? ''), arrange ? `arr${arrange.len}${arrange.shape}` : '', film ? `film${r3(film.bpm)}:${film.parts.map((x) => x.bars + x.kind).join(',')}` : '', bed ? 'bed' : '', prefs.polish ? 'p' : ''].join('|');
   const musicKey = `${songKey}|${scheme}`;
   const key = `${musicKey}|${pack}`;
   const hit = memo.get(key);
@@ -115,6 +118,7 @@ export function planAudio(i: PlanInput): AudioPlan {
     midiStart: prefs.midiStart,
     midiBars: prefs.midiBars,
     arrange,
+    film,
     bed,
     polish: prefs.polish,
   });

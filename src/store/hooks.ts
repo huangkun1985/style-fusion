@@ -3,7 +3,7 @@ import { planAudio } from '../audio/plan';
 import { MOTION_MAP } from '../data/motion';
 import type { Sel } from '../data/schema';
 import { VISUAL_MAP } from '../data/visual';
-import { currentThemePalette } from '../engine/themes';
+import { currentThemePalette, type Theme } from '../engine/themes';
 import { resolveLook, resolveMove, TUNE_DEFAULT } from '../engine/resolve';
 import type { ThumbSpec } from '../engine/thumbs';
 import type { SubjectId, Tune } from '../engine/types';
@@ -65,8 +65,9 @@ export function styleSpec(kind: 'v' | 'm', id: string, mode: ThumbMode, cur: { v
 }
 
 const mixCache = new Map<string, ThumbSpec>();
-export function mixSpec(v: Sel[], m: Sel[], subject: SubjectId, tune: Tune = TUNE_DEFAULT): ThumbSpec {
-  const base = subject === 'custom' ? currentThemePalette() : undefined;
+/** theme：別的場景的生成內容（用它自己的色板）；不給＝目前的主題 */
+export function mixSpec(v: Sel[], m: Sel[], subject: SubjectId, tune: Tune = TUNE_DEFAULT, theme?: Theme | null): ThumbSpec {
+  const base = subject === 'custom' ? (theme !== undefined ? (theme?.palette ?? undefined) : currentThemePalette()) : undefined;
   const key = `${sig(v)}|${sig(m)}|${subject}|${JSON.stringify(tune)}|${JSON.stringify(base ?? '')}`;
   let s = mixCache.get(key);
   if (!s) {

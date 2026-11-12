@@ -1,5 +1,5 @@
 // 縮圖排程器：上百張即時縮圖共用一個渲染器，只畫看得見的、並限制每幀時間預算。
-import { Renderer } from './renderer';
+import { Renderer, type FrameScope } from './renderer';
 import { SUBJECTS } from './subjects';
 import type { Look, Move, SubjectId, Tune } from './types';
 
@@ -8,6 +8,8 @@ export interface ThumbSpec {
   look: Look;
   move: Move;
   tune: Tune;
+  /** 2.0 β：別的場景的內容欄位與主題 */
+  scope?: FrameScope;
 }
 
 interface Job {

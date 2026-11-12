@@ -2,6 +2,7 @@
 // 一次只跑一個請求；結果先「預覽」在舞台上（history.beginPreview），使用者按套用才變成一步、才存檔。
 import { create } from 'zustand';
 import { clock } from '../engine/clock';
+import { filmModel, shotAt } from '../store/film';
 import { themes } from '../engine/themes';
 import { beginPreview, commitPreview, discardPreview, onPreviewEnd } from '../store/history';
 import type { ChatMsg, Stamp } from '../store/project';
@@ -139,7 +140,18 @@ export function addStampNow() {
   const theme = themes.current();
   const s = useStore.getState();
   if (s.subject !== 'custom' || !theme) return;
-  const t = ((clock.t % theme.loop) + theme.loop) % theme.loop;
+  // 2.0 β：播放整支片子時，時鐘是片子的時間；換成目前這一場裡的時間（播放頭不在這一場就不加）
+  let now = clock.t;
+  if (s.filmPlay) {
+    const film = filmModel(s);
+    const sh = shotAt(film, now);
+    if (sh.id !== s.activeScene) {
+      s.showToast('播放頭不在目前這一場：先在時間軸點這一場，或回到「單場」再附上時間點');
+      return;
+    }
+    now = (((now % film.total) + film.total) % film.total) - sh.start;
+  }
+  const t = ((now % theme.loop) + theme.loop) % theme.loop;
   const r = Math.round(t * 100) / 100;
   if (s.stamps.some((x) => Math.abs(x.t - r) < 0.05) || s.stamps.length >= 8) return;
   useStore.setState({ stamps: [...s.stamps, { t: r, label: stampLabel(theme, r) }] });

@@ -100,6 +100,7 @@ export function applyArrangement(tracks: Track[], c: ArrangeCtx): Track[] {
     // R-14：每小節哪些拍點本來就有音（回落時用來判斷要不要把別的音移過去）
     const onBeat = new Set<number>();
     const moved = new Map<number, number>();
+    let peak = 0;
     for (const n of tr.notes) {
       const b = Math.floor(n.t / c.spb);
       const st = n.t - b * c.spb;
@@ -148,9 +149,13 @@ export function applyArrangement(tracks: Track[], c: ArrangeCtx): Track[] {
         dur = Math.max(dur, (c.spb === 16 ? 8 : 12) * 0.92);
       }
       if (c.cadence && bar === lastBar && role !== 'perc') continue; // 最後一小節：下面放一個長和弦
+      peak = Math.max(peak, lv);
       notes.push({ ...n, t, dur, vel: clamp(n.vel * lv, 0.05, 1) });
     }
-    out.push({ ...tr, notes });
+    // 審查 R-02：整軌最大聲的那一段都比 1 小（例如墊底的琶音 ×0.75、平穩主體的琶音 0.6），精修的逐軌響度對齊會把它拉回目標。
+    // 把「整軌要低多少」記成 trim（dB），精修對齊時加上去；段落之間的相對大小仍在力度裡
+    const trim = role !== 'perc' && peak > 0 && peak < 0.999 ? Math.round(20 * Math.log10(peak) * 10) / 10 : 0;
+    out.push({ ...tr, notes, ...(trim ? { trim } : {}) });
   }
   return out;
 }

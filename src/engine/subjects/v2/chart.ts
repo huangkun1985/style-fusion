@@ -7,6 +7,7 @@ import type { Cue } from '../../../audio/types';
 import { mix } from '../../color';
 import { TAU, clamp, hash, lerp } from '../../util';
 import type { Subject } from '../types';
+import { content, contentNum } from '../../content';
 
 const N = 30; // 細長條數
 const PEAK = 22; // 標註釘的位置
@@ -127,15 +128,15 @@ export const chart2: Subject = {
 
     // ── 標題、大數字與成長膠囊、區間分頁
     const cnt = M.tw(0.1, 0.46, 'o');
-    T('Portfolio Performance', left, top, 10.5, 'ink', { a: 0.55 });
-    T(`$${(128.4 * clamp(cnt)).toFixed(1)}K`, left, top + 30, 28, 'ink');
+    T(content('chart', 'title', 'Portfolio Performance'), left, top, 10.5, 'ink', { a: 0.55 });
+    T(`$${(contentNum('chart', 'total', 128.4) * clamp(cnt)).toFixed(1)}K`, left, top + 30, 28, 'ink');
     const bdg = M.tw(0.4, 0.5, 'o');
     if (bdg > 0.01) {
       S.push();
       S.translate(left + S.measure('$128.4K', 28) + 14, top + 31);
       S.scale(clamp(bdg));
       S.rect(31, 0, 62, 20, 10, posBg, FL);
-      T('▲ 14.6%', 31, 0.5, 10.5, 'q', { align: 'center' });
+      T(content('chart', 'change', '▲ 14.6%'), 31, 0.5, 10.5, 'q', { align: 'center' });
       S.pop();
     }
     if (!L.portrait) {
@@ -214,11 +215,11 @@ export const chart2: Subject = {
       if (vis > 0.1) S.arc(L.dcx, L.dcy, R0, acc + 0.06, acc + vis - 0.06, segC[i], { w: 11, cap: 'butt' });
       acc += span;
     });
-    T(`${(75.8 * clamp(sweep)).toFixed(1)}%`, L.dcx, L.dcy - 3, 17, 'ink', { align: 'center' });
+    T(`${(contentNum('chart', 'score', 75.8, 0, 100) * clamp(sweep)).toFixed(1)}%`, L.dcx, L.dcy - 3, 17, 'ink', { align: 'center' });
     if (sweep > 0.5) {
       S.alpha = baseA * clamp(cin * 1.3) * (1 - cout) * clamp((sweep - 0.5) * 3);
       S.rect(L.dcx, L.dcy + 14, 54, 14, 7, posBg, FL);
-      T('Health Score', L.dcx, L.dcy + 14.5, 7.5, 'q', { align: 'center' });
+      T(content('chart', 'scoreLabel', 'Health Score'), L.dcx, L.dcy + 14.5, 7.5, 'q', { align: 'center' });
       S.alpha = baseA * clamp(cin * 1.3) * (1 - cout);
     }
 

@@ -14,7 +14,7 @@ import { thumbs } from '../engine/thumbs';
 import { saveBlob, safeStorage } from '../lib/platform';
 import { resetHistory } from './history';
 import { themes } from '../engine/themes';
-import { makeProject, MAX_CHAT, newId, sanitizeAgent, sanitizeMidi, sanitizeMix, sanitizeProject, sanitizeRecipes, sceneKindOf, sceneMusicOf, type Project, type SceneMix } from './project';
+import { FILM_DEFAULT, makeProject, MAX_CHAT, newId, sanitizeAgent, sanitizeMidi, sanitizeMix, sanitizeProject, sanitizeRecipes, sceneKindOf, sceneMusicOf, type Project, type SceneMix } from './project';
 import { useStore, type RightTab, type UiMode } from './store';
 
 const DB_NAME = 'style-fusion';
@@ -231,6 +231,10 @@ export function currentProject(): Project {
     agent: s.agent,
     ...(s.migratedFrom ? { migratedFrom: s.migratedFrom } : {}),
     ...(importedMidiRaw() ? { midi: importedMidiRaw()! } : {}),
+    film: s.film,
+    // 只存有用到的真實音效（換掉的舊檔不帶著走；這個 session 裡復原仍拿得到，因為 store 還留著）
+    ...(s.sounds.some((x) => Object.values(s.sfxMap).includes(x.id)) ? { sounds: s.sounds.filter((x) => Object.values(s.sfxMap).includes(x.id)) } : {}),
+    ...(Object.keys(s.sfxMap).length ? { sfxMap: s.sfxMap } : {}),
   };
 }
 
@@ -287,6 +291,10 @@ function loadIntoStore(p: Project) {
     chat: sc.chat ?? [],
     stamps: [],
     content: mx.content ?? {},
+    film: p.film ?? FILM_DEFAULT,
+    filmPlay: false,
+    sounds: p.sounds ?? [],
+    sfxMap: p.sfxMap ?? {},
     saveState: 'saved',
     view: 'mixer',
   }));
@@ -399,7 +407,7 @@ function startAutosave() {
   const offStore = useStore.subscribe((s, prev) => {
     const docChanged =
       s.v !== prev.v || s.m !== prev.m || s.subject !== prev.subject || s.tune !== prev.tune || s.aspect !== prev.aspect || s.saved !== prev.saved ||
-      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes || s.chat !== prev.chat || s.themeRev !== prev.themeRev || s.content !== prev.content || s.midiRev !== prev.midiRev ||
+      s.projectName !== prev.projectName || s.agent !== prev.agent || s.scenes !== prev.scenes || s.chat !== prev.chat || s.themeRev !== prev.themeRev || s.content !== prev.content || s.midiRev !== prev.midiRev || s.film !== prev.film || s.sounds !== prev.sounds || s.sfxMap !== prev.sfxMap ||
       (s.audio !== prev.audio && JSON.stringify(sceneMusicOf(s.audio)) !== JSON.stringify(sceneMusicOf(prev.audio)));
     if (docChanged && !s.hist.showingA && !s.hist.previewing) {
       if (s.saveState !== 'saving') useStore.setState({ saveState: 'saving' });
@@ -458,9 +466,9 @@ export async function deleteProject(id: string) {
   return true;
 }
 
-const fileSafe = (s: string) => s.replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'project';
+export const fileSafe = (s: string) => s.replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'project';
 
-/** 存成 .sfproj（JSON）。注意：自訂動畫主題與匯入的 MIDI 目前仍存在瀏覽器裡，沒有一起放進檔案（α3／β 處理）。 */
+/** 存成 .sfproj（JSON）：場景、生成的內容、對話、匯入的 MIDI、片子的標記、真實音效都在裡面，傳到另一台電腦用「開啟檔案」就能打開 */
 export function saveProjectFile(): boolean {
   const p = currentProject();
   const blob = new Blob([JSON.stringify(p, null, 2)], { type: 'application/json' });
@@ -469,7 +477,7 @@ export function saveProjectFile(): boolean {
 
 /** 從 .sfproj 開啟：檔案內容逐欄檢查；開成一個新的專案（新的 id），原本的專案留著，不會被覆蓋 */
 export async function openProjectFile(file: File): Promise<string | null> {
-  if (file.size > 5_000_000) return '檔案太大（超過 5 MB），不像是專案檔';
+  if (file.size > 40_000_000) return '檔案太大（超過 40 MB），不像是專案檔';
   let raw: unknown;
   try {
     raw = JSON.parse(await file.text());

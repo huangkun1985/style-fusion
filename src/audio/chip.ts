@@ -2,7 +2,7 @@
 // 全部用程式逐樣本合成；和弦在 NES／GB／SID 以快速琶音模擬（單聲道晶片的老招）。
 import { clamp } from '../engine/util';
 import { DRUM_NOTE } from './genres';
-import { Noise, Svf, adsr, foldTail, freeverb, master, newStereo, noteSpan, onePoleLP, panGains, quant, removeMean, yieldNow, type Stereo } from './dsp';
+import { Noise, Svf, adsr, foldTail, keepTail, freeverb, master, newStereo, noteSpan, onePoleLP, panGains, quant, removeMean, yieldNow, type Stereo } from './dsp';
 import { mtof } from './theory';
 import type { NoteEv, Song, Track, TrackRole } from './types';
 
@@ -343,6 +343,8 @@ export interface RenderOpts {
   yieldEvery?: boolean;
   /** 除錯用：不做母帶標準化，輸出原始混音（用來比較各軌音量） */
   raw?: boolean;
+  /** 審查 R-16：不把尾音折回開頭（有收尾的配樂導出用）：輸出長度＝曲長＋實際的尾音，開頭不會帶著結尾的殘響 */
+  noFold?: boolean;
 }
 
 export async function renderChip(song: Song, scheme: ChipScheme, opts: RenderOpts): Promise<Stereo> {
@@ -385,7 +387,7 @@ export async function renderChip(song: Song, scheme: ChipScheme, opts: RenderOpt
   }
   onePoleLP(mix.l, m.lp, sr);
   onePoleLP(mix.r, m.lp, sr);
-  const out = foldTail(mix, n);
+  const out = opts.noFold ? keepTail(mix, n) : foldTail(mix, n);
   removeMean(out.l);
   removeMean(out.r);
   if (!opts.raw) master(out, 0.12);

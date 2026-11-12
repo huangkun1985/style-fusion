@@ -13,6 +13,8 @@ import { SUBJECTS } from './subjects';
 import type { Subject } from './subjects/types';
 import { is3D, type FxInst, type Look, type Move, type SubjectId, type Tune } from './types';
 import { TAU, bump, hash, smooth } from './util';
+import { withContent } from './content';
+import { withTheme, type Theme } from './themes';
 
 export interface FrameSpec {
   subject: SubjectId;
@@ -28,6 +30,20 @@ export interface FrameSpec {
   live?: boolean;
   /** 關閉 WebGL 後期（比較用） */
   noPost?: boolean;
+  /** 2.0 β：畫「別的場景」時用那一場自己的內容欄位與生成的主題（不設定＝目前場景） */
+  scope?: FrameScope;
+}
+
+export interface FrameScope {
+  content?: Record<string, string>;
+  /** 生成的內容（自訂主題）；null＝沒有主題 */
+  theme?: Theme | null;
+}
+
+/** 在某個場景的內容底下做事（畫圖、算提示點、算循環長度） */
+export function inScope<T>(scope: FrameScope | undefined, fn: () => T): T {
+  if (!scope) return fn();
+  return withTheme(scope.theme, () => withContent(scope.content, fn));
 }
 
 interface Cam {
@@ -193,6 +209,11 @@ export class Renderer {
   }
 
   render(out: CanvasRenderingContext2D, W: number, H: number, f: FrameSpec) {
+    if (f.scope) inScope(f.scope, () => this.draw(out, W, H, f));
+    else this.draw(out, W, H, f);
+  }
+
+  private draw(out: CanvasRenderingContext2D, W: number, H: number, f: FrameSpec) {
     W = Math.max(2, Math.round(W));
     H = Math.max(2, Math.round(H));
     const sub = SUBJECTS[f.subject] ?? SUBJECTS.mascot;

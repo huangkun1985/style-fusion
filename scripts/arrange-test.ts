@@ -129,6 +129,39 @@ for (const [g, sh, bed] of [['cinematic', 'build', false], ['pop', 'arc', true],
 }
 console.log('render ok');
 
+// 6) 審查 R-02：精修開著時，墊底的琶音也要真的比較小（以前精修的逐軌響度對齊會把它拉回去，差 0.0 dB）
+{
+  const { activeLoudness } = await import('../src/audio/dsp');
+  for (const g of ['house', 'kpop', 'cinematic'] as GenreId[]) {
+    const arpL = async (bed: boolean) => {
+      const s = composeSong({ genre: g, seed: 4, animSeconds: 3.2, sync: true, tempo: 1, key: -1, arrange: { len: 24, shape: 'build' }, bed, polish: true });
+      const arp = s.tracks.find((t) => t.role === 'arp');
+      if (!arp) return null;
+      const pcm = await renderScheme({ ...s, tracks: [arp] }, 'midi', { sr: 44100, seed: 4, raw: true });
+      return activeLoudness(pcm.l, 44100);
+    };
+    const a = await arpL(false);
+    const b = await arpL(true);
+    if (a === null || b === null) continue;
+    ok(b - a < -1.5, `${g} 墊底琶音應該小聲一點：${a.toFixed(1)} → ${b.toFixed(1)} dB`);
+    console.log(`  ${g} 琶音 無墊底 ${a.toFixed(1)} → 墊底 ${b.toFixed(1)} dB（差 ${(b - a).toFixed(1)}）`);
+  }
+}
+console.log('R-02 ok');
+
+// 7) 審查 R-16：有收尾的配樂可以不折回尾音（導出用）：開頭不帶結尾的殘響，結尾多留尾音
+{
+  const s = composeSong({ genre: 'cinematic', seed: 2, animSeconds: 3.2, sync: true, tempo: 1, key: -1, arrange: { len: 16, shape: 'arc' }, polish: true });
+  const fold = await renderScheme(s, 'midi', { sr: 44100, seed: 2, raw: true });
+  const keep = await renderScheme(s, 'midi', { sr: 44100, seed: 2, raw: true, noFold: true });
+  const n = Math.round(s.seconds * 44100);
+  ok(keep.l.length > n + 4410, `不折回要多留尾音：${keep.l.length - n} 個取樣`);
+  let diff = 0;
+  for (let i = 0; i < 2000; i++) diff = Math.max(diff, Math.abs(fold.l[i] - keep.l[i]));
+  ok(diff > 1e-4, '折回版的開頭應該帶著尾音（兩者開頭不同）');
+}
+console.log('R-16 ok');
+
 if (fails) {
   console.log(`ARRANGE FAIL（${fails} 項）`);
   process.exit(1);

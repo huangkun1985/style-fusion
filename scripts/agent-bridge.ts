@@ -207,7 +207,120 @@ async function handle(req: IncomingMessage, res: ServerResponse, next: () => voi
     return;
   }
 
+  // ---------- 真實音效庫（2.0 β，F11b）：代抓 Freesound 的搜尋頁與試聽檔（網頁不能直接跨站讀） ----------
+  if ((path === 'sfx-search' || path === 'sfx-fetch') && req.method === 'POST') {
+    if (!LOCAL_ORIGIN.test(String(req.headers.origin ?? ''))) return deny(res, 403, 'origin');
+    if (req.headers['x-sf-token'] !== TOKEN) return deny(res, 403, 'token');
+    let body: { q?: unknown; license?: unknown; url?: unknown };
+    try {
+      body = JSON.parse(await readBody(req));
+    } catch {
+      return deny(res, 400, 'body');
+    }
+    if (path === 'sfx-search') {
+      const q = typeof body.q === 'string' ? body.q.trim().slice(0, 120) : '';
+      if (!q) return deny(res, 400, 'query');
+      const lic = body.license === 'by' || body.license === 'any' ? body.license : 'cc0';
+      try {
+        const rows = await freesoundSearch(q, lic);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify({ rows }));
+      } catch (e) {
+        deny(res, 502, `freesound: ${(e as Error).message}`.slice(0, 200));
+      }
+      return;
+    }
+    const url = typeof body.url === 'string' ? body.url : '';
+    // 只代抓 Freesound 的試聽檔（不當成任意網址的代理）
+    if (!/^https:\/\/cdn\.freesound\.org\/previews\/\d+\/[\w.-]+\.(mp3|ogg)$/.test(url)) return deny(res, 400, 'url');
+    try {
+      const r = await fetchWithTimeout(url, 60_000);
+      if (!r.ok) return deny(res, 502, `freesound ${r.status}`);
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 8_000_000) return deny(res, 413, 'too large');
+      res.setHeader('Content-Type', url.endsWith('.ogg') ? 'audio/ogg' : 'audio/mpeg');
+      res.end(buf);
+    } catch (e) {
+      deny(res, 502, `freesound: ${(e as Error).message}`.slice(0, 200));
+    }
+    return;
+  }
+
   return deny(res, 404, 'not found');
+}
+
+// ---------- Freesound（照 sound skill 的做法讀搜尋結果頁；Freesound 改版就要跟著改） ----------
+const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) style-fusion-local' };
+const FS_LICENSE: Record<string, string | null> = { cc0: '"Creative Commons 0"', by: '("Attribution" OR "Creative Commons 0")', any: null };
+const FS_LIC_SHORT: Record<string, string> = { 'Creative Commons 0': 'CC0', Attribution: 'BY', 'Attribution NonCommercial': 'BY-NC', 'Sampling+': 'Sampling+' };
+
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    return await fetch(url, { headers: UA, signal: ctl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const unescape = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+
+export interface FsRow {
+  id: string;
+  title: string;
+  dur: number;
+  author: string;
+  license: string;
+  downloads: number;
+  rating: number | null;
+  votes: number;
+  desc: string;
+  preview: string;
+  page: string;
+}
+
+export function parseFreesound(html: string): FsRow[] {
+  const rows: FsRow[] = [];
+  for (const blk of html.split('class="bw-search__result"').slice(1)) {
+    const g = (k: string) => (blk.match(new RegExp(`data-${k}="([^"]*)"`)) ?? [, ''])[1] ?? '';
+    const lic = blk.match(/title="License: ([^"]+)"/);
+    const rt = blk.match(/aria-label="Average rating of ([\d.]+)"/);
+    const rn = blk.match(/bw-rating__count[^>]*>\((\d+)\)/);
+    const desc = blk.match(/<div class="max-h-60px[^"]*"\s*>\s*([\s\S]*?)\s*<\/div>/);
+    const id = g('sound-id');
+    const user = g('username');
+    const mp3 = g('mp3').replace('-lq.mp3', '-hq.mp3');
+    if (!id || !mp3) continue;
+    rows.push({
+      id,
+      title: unescape(g('title')),
+      dur: Number(g('duration')) || 0,
+      author: user,
+      license: lic ? (FS_LIC_SHORT[lic[1]] ?? lic[1]) : '?',
+      downloads: Number(g('num-downloads')) || 0,
+      rating: rt ? Number(rt[1]) : null,
+      votes: rn ? Number(rn[1]) : 0,
+      desc: desc ? unescape(desc[1].replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim().slice(0, 160) : '',
+      preview: mp3,
+      page: user ? `https://freesound.org/people/${encodeURIComponent(user)}/sounds/${id}/` : `https://freesound.org/s/${id}/`,
+    });
+  }
+  return rows;
+}
+
+/** 搜兩頁（依相關度），再依下載數排序（sound skill 的做法：伺服器端依下載數排，會讓不相干的熱門音效勝出） */
+async function freesoundSearch(q: string, lic: string): Promise<FsRow[]> {
+  const params = (page: number) => {
+    const u = new URLSearchParams({ q, s: 'Automatic by relevance', page: String(page) });
+    if (FS_LICENSE[lic]) u.set('f', `license:${FS_LICENSE[lic]}`);
+    return u.toString();
+  };
+  const pages = await Promise.all([1, 2].map((p) => fetchWithTimeout(`https://freesound.org/search/?${params(p)}`, 30_000).then((r) => (r.ok ? r.text() : ''))));
+  const seen = new Set<string>();
+  const rows = pages.flatMap(parseFreesound).filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+  rows.sort((a, b) => b.downloads - a.downloads);
+  return rows.slice(0, 20);
 }
 
 export function agentBridge(): Plugin {

@@ -15,6 +15,10 @@ import { canMp4, estimateFrames, runExport, type ExportFormat } from '../lib/exp
 import { inArtifact, saveBlob } from '../lib/platform';
 import { styleSpec, useAudioPlan, useLookMove } from '../store/hooks';
 import { encodeMix, musicOf } from '../store/share';
+import { FilmCues, filmModel } from '../store/film';
+import { makeStylePack } from '../lib/stylePack';
+import { stemsSupported } from '../audio/files';
+import { currentProject, fileSafe, saveProjectFile } from '../store/persist';
 import { useStore } from '../store/store';
 import { SUBJECT_ICON } from './icons';
 import { ASPECT } from './Stage';
@@ -171,7 +175,17 @@ export function ExportModal() {
   const audioPrefs = useStore((s) => s.audio);
   const { look, move, tune } = useLookMove();
   const { plan } = useAudioPlan();
+  const st = useStore();
+  const multi = st.scenes.length > 1;
+  // 2.0 β：導出範圍——這一場／整支片子（所有場景接起來，含淡轉場與跟著場景走的配樂）
+  const [range, setRange] = useState<'scene' | 'film'>('scene');
+  const filmOn = multi && range === 'film';
+  const film = filmOn ? filmModel(st) : null;
   const [fmt, setFmt] = useState<ExportFormat>('gif');
+  // 2.0 β：要導出什麼——動畫檔（GIF、MP4…）／風格包（提案影片＋規格網頁＋色板＋代碼＋分軌＋專案檔，一個 ZIP）
+  const [what, setWhat] = useState<'media' | 'pack'>('media');
+  const [packVideo, setPackVideo] = useState(true);
+  const [packStems, setPackStems] = useState(false);
   const [short, setShort] = useState('480');
   const [fps, setFps] = useState('24');
   const [loops, setLoops] = useState('1');
@@ -194,7 +208,7 @@ export function ExportModal() {
   const useSong = loops === 'song' && songLonger;
   const seconds = useSong ? songSec : undefined;
   const nLoops = useSong ? 1 : Math.max(1, parseInt(loops) || 1);
-  const frames = estimateFrames({ subject, move, tune, fps: parseInt(fps), loops: nLoops, seconds });
+  const frames = estimateFrames({ subject, move, tune, fps: parseInt(fps), loops: nLoops, seconds, film: film ?? undefined });
   const close = () => {
     abort.current?.abort();
     set({ exportOpen: false });
@@ -209,13 +223,43 @@ export function ExportModal() {
     } else {
       setWithAudio(useStore.getState().audio.on);
       // 音樂視覺化與配樂模式：畫面跟著整首歌走，預設導出整首
-      const st = useStore.getState();
-      if (st.subject === 'music' || st.audio.arrange) setLoops('song');
+      const st0 = useStore.getState();
+      if (st0.subject === 'music' || st0.audio.arrange) setLoops('song');
+      // 正在播整支片子：預設導出整支
+      setRange(st0.filmPlay && st0.scenes.length > 1 ? 'film' : 'scene');
+      if (st0.filmPlay && st0.scenes.length > 1) setFmt('mp4');
     }
   }, [open]);
   const hasSound = audioPrefs.bgm || audioPrefs.sfx;
   const audioWanted = (fmt === 'mp4' || fmt === 'webm') && withAudio && hasSound;
+  const startPack = async () => {
+    setBusy(true);
+    setErr('');
+    setResult(null);
+    setProg(0);
+    abort.current = new AbortController();
+    try {
+      const { blob, name, note } = await makeStylePack(
+        { video: packVideo, stems: packStems && stemsSupported(packScheme), short: Math.min(720, sh), fps: Math.min(30, parseInt(fps)), aspect: ar },
+        (text, p) => {
+          setPhase(text);
+          setProg(p);
+        },
+        abort.current.signal,
+      );
+      const url = URL.createObjectURL(blob);
+      setResult({ url, name, size: blob.size, note });
+      saveBlob(blob, name);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+      setPhase('');
+    }
+  };
+  const packScheme = filmModel(st).plan.scheme;
   const start = async () => {
+    if (what === 'pack') return startPack();
     setBusy(true);
     setErr('');
     setResult(null);
@@ -226,12 +270,12 @@ export function ExportModal() {
       if (audioWanted) {
         // 先把音樂渲染好並混出與影片等長的音軌（含動畫提示點的音效）
         setPhase('正在渲染音樂…');
-        audio = await audioEngine.exportMix(frames / parseInt(fps));
+        audio = film ? await audioEngine.exportFilmMix(film.plan, new FilmCues(film, ar), frames / parseInt(fps)) : await audioEngine.exportMix(frames / parseInt(fps));
         if (abort.current.signal.aborted) throw new Error('已取消');
       }
       setPhase(audio ? '逐幀渲染並封裝影音…' : '');
       const { blob, name, note } = await runExport(
-        { format: fmt, subject, look, move, tune, w: w - (w % 2), h: h - (h % 2), fps: parseInt(fps), loops: nLoops, seconds, transparent: transparent && ['png', 'zip', 'sprite'].includes(fmt), audio },
+        { format: fmt, subject, look, move, tune, w: w - (w % 2), h: h - (h % 2), fps: parseInt(fps), loops: nLoops, seconds, transparent: transparent && ['png', 'zip', 'sprite'].includes(fmt), audio, ...(film ? { film, name: `${fileSafe(st.projectName)}-整支片子` } : {}) },
         setProg,
         abort.current.signal,
       );
@@ -250,11 +294,11 @@ export function ExportModal() {
     <Modal
       open={open}
       onClose={close}
-      title="導出動畫"
+      title={what === 'pack' ? '導出風格包' : '導出動畫'}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="num text-xs text-fg-3">
-            {w}×{h} · {fmt === 'png' ? '1 幀' : `${frames} 幀 · ${(frames / parseInt(fps)).toFixed(2)}s`}
+            {what === 'pack' ? `${st.scenes.length} 場 · ${filmModel(st).total.toFixed(1)}s` : `${w}×${h} · ${fmt === 'png' ? '1 幀' : `${frames} 幀 · ${(frames / parseInt(fps)).toFixed(2)}s`}`}
           </span>
           <div className="flex gap-2">
             {busy ? (
@@ -271,6 +315,55 @@ export function ExportModal() {
       }
     >
       <div className="flex flex-col gap-4">
+        <Segmented
+          id="ex-what"
+          value={what}
+          onChange={(v) => setWhat(v as 'media' | 'pack')}
+          options={[
+            { value: 'media', label: '動畫檔', title: '動畫檔：GIF、MP4、WebM、PNG、精靈圖。要放進簡報、網頁或剪輯時用' },
+            { value: 'pack', label: '風格包', title: '風格包：提案影片＋規格網頁＋色板＋代碼＋分軌＋專案檔，打成一個 ZIP。要把整支片子交給客戶、工程師或另一台電腦時用' },
+          ]}
+        />
+        {what === 'pack' ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-[13px] leading-relaxed text-fg-2">把整支片子（{st.scenes.length} 場）交付出去需要的東西打成一個 ZIP。打開裡面的「規格.html」就能看每一場的畫面、色板、緩動、代碼、標記與授權。</p>
+            <ul className="list-disc pl-5 text-[12px] leading-relaxed text-fg-2">
+              <li>提案影片.mp4：整支片子，含淡轉場、配樂與音效（{Math.min(720, sh)}p、{Math.min(30, parseInt(fps))} fps）</li>
+              <li>規格.html：一個檔就能開，傳給誰都看得到</li>
+              <li>色板／代碼：每一場的 JSON、CSS 變數、SVG 色票；CSS、GSAP、AE 表達式、給 AI Agent 的 JSON</li>
+              <li>專案檔 .sfproj：在另一台電腦用「開啟檔案」就能繼續改（含生成的內容、對話、匯入的 MIDI、真實音效）</li>
+            </ul>
+            <label htmlFor="pk-video" className="flex items-center gap-2 text-[13px] text-fg-2" title="提案影片：整支片子的 MP4。最花時間的一步；只要規格與代碼時可以關掉">
+              <input id="pk-video" type="checkbox" checked={packVideo && canMp4} disabled={!canMp4} onChange={(e) => setPackVideo(e.target.checked)} className="size-4 accent-[var(--mot)]" />
+              放提案影片（MP4）{!canMp4 && '：這個瀏覽器不支援'}
+            </label>
+            <label htmlFor="pk-stems" className="flex items-center gap-2 text-[13px] text-fg-2" title={stemsSupported(packScheme) ? '分軌：配樂每個聲部一個 WAV（加總就是混音）。要交給剪輯或編曲時用；檔案會大很多' : '分軌只支援「MIDI（真實樂器）」聲音方案；沒有分軌時會放一個配樂的 MIDI'}>
+              <input id="pk-stems" type="checkbox" checked={packStems && stemsSupported(packScheme)} disabled={!stemsSupported(packScheme)} onChange={(e) => setPackStems(e.target.checked)} className="size-4 accent-[var(--mot)]" />
+              放配樂分軌（WAV）{!stemsSupported(packScheme) && '：只支援 MIDI 聲音方案'}
+            </label>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-fg-2">影片短邊尺寸</span>
+              <Segmented id="pk-size" size="sm" value={String(Math.min(720, sh))} onChange={setShort} options={['360', '480', '720'].map((x) => ({ value: x, label: x }))} />
+            </div>
+          </div>
+        ) : (
+        <>
+        {multi && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-fg-2">範圍</span>
+            <Segmented
+              id="ex-range"
+              size="sm"
+              value={range}
+              onChange={(v) => setRange(v as 'scene' | 'film')}
+              options={[
+                { value: 'scene', label: '這一場', title: '只導出目前這一場（照下面的「長度」循環幾次）' },
+                { value: 'film', label: `整支片子（${st.scenes.length} 場）`, title: '整支片子：所有場景接起來，含淡轉場與跟著場景走的配樂。要給客戶看完整提案時用' },
+              ]}
+            />
+            {film && <p className="text-[11px] leading-relaxed text-fg-3">共 {film.shots.length} 場、{film.total.toFixed(1)} 秒；配樂{film.scored ? `每一場一個段落（${film.shots.map((x) => x.section).join('→')}），有收尾` : '照原曲循環'}。建議用 MP4。</p>}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {FORMATS.map((f) => {
             const na = (f.id === 'mp4' && !canMp4) || (f.id === 'webm' && typeof MediaRecorder === 'undefined');
@@ -293,7 +386,7 @@ export function ExportModal() {
             <span className="text-xs text-fg-2">短邊尺寸</span>
             <Segmented id="ex-size" size="sm" value={short} onChange={setShort} options={['360', '480', '720', '1080'].map((x) => ({ value: x, label: x }))} />
           </div>
-          {fmt !== 'png' && (
+          {fmt !== 'png' && !film && (
             <>
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-fg-2">幀率</span>
@@ -338,6 +431,8 @@ export function ExportModal() {
           {fmt === 'gif' && frames / parseInt(fps) > 15 ? ' GIF 超過 15 秒檔案會很大，長片段建議用 MP4。' : ''}
           {inArtifact && ' 在 claude.ai 的預覽框裡，瀏覽器可能會擋下自動下載；若沒有出現檔案，請在本地版本導出。'}
         </p>
+        </>
+        )}
         {busy && phase && <p className="text-xs text-fg-2">{phase}</p>}
         {(busy || prog > 0) && (
           <div className="flex items-center gap-3">
@@ -365,6 +460,37 @@ export function ExportModal() {
   );
 }
 
+/** 專案檔分享（2.0 β，F11）：整個專案（所有場景、生成的內容、對話、標記、匯入的 MIDI、真實音效）存成一個 .sfproj，傳給別人或另一台電腦 */
+function ProjectShare() {
+  const st = useStore();
+  const [busy, setBusy] = useState(false);
+  const bytes = useMemo(() => (st.shareOpen ? JSON.stringify(currentProject()).length : 0), [st.shareOpen, st.scenes, st.sounds, st.film]);
+  return (
+    <div>
+      <SectionTitle>分享整個專案</SectionTitle>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="soft"
+          disabled={busy}
+          title="存成專案檔（.sfproj）：所有場景、生成的內容、對話、片子的標記、匯入的 MIDI、真實音效都在裡面。要交給同事、或換一台電腦繼續做時用"
+          onClick={() => {
+            setBusy(true);
+            try {
+              if (saveProjectFile()) st.showToast('已存成專案檔');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <Download size={15} /> 存成專案檔
+        </Button>
+        <span className="num text-xs text-fg-3">約 {(bytes / 1024 / 1024).toFixed(2)} MB · {st.scenes.length} 場</span>
+      </div>
+      <p className="mt-1 text-xs leading-relaxed text-fg-3">對方在 Style Fusion 按左上角的專案名稱 ▾ →「開啟檔案」選這個檔，就會開成一個新專案（不會蓋掉他原本的）。雙擊的單檔版、線上版都能開。要連影片、規格網頁一起給，請用「導出」→「風格包」。</p>
+    </div>
+  );
+}
+
 export function ShareModal() {
   const open = useStore((s) => s.shareOpen);
   const set = useStore((s) => s.set);
@@ -383,6 +509,7 @@ export function ShareModal() {
   return (
     <Modal open={open} onClose={() => set({ shareOpen: false })} title="配方碼與分享">
       <div className="flex flex-col gap-4">
+        <ProjectShare />
         <div>
           <SectionTitle right={<CopyButton size="xs" text={code} label="複製配方碼" />}>目前混合的配方碼</SectionTitle>
           <textarea id="share-code" readOnly value={code} rows={3} className="num w-full resize-none rounded-lg border border-line bg-panel-2 p-2 text-[11px] text-fg-2 outline-none" onFocus={(e) => e.target.select()} />

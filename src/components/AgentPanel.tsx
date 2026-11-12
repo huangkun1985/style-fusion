@@ -575,6 +575,7 @@ function TemplateContent({ subject }: { subject: SubjectId }) {
               value={v}
               placeholder={f.def}
               maxLength={f.max * 2}
+              inputMode={f.num ? 'decimal' : undefined}
               title={`${f.tip}。空著就用預設的「${f.def.trim()}」`}
               onFocus={() => beginGesture()}
               onBlur={() => endGesture()}

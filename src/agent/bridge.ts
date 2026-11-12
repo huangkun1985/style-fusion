@@ -40,6 +40,35 @@ export function connectBridge(refresh = false): Promise<BridgeInfo> {
   return pending;
 }
 
+/** 本機伺服器的其他端點（真實音效庫）：帶通行碼 POST JSON。連不上（不是 start.bat 開的）丟出 AgentError('none') */
+export async function bridgePost(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+  if (!token) {
+    const info = await connectBridge(true);
+    if (info.state === 'none' || !token) throw new AgentError('none', '只有用 start.bat（或 start-dev.bat）開的時候才能搜尋與下載真實音效');
+  }
+  let r: Response;
+  try {
+    r = await fetch(`./__sf/agent/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-SF-Token': token }, body: JSON.stringify(body), signal });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw new AgentError('aborted', '已取消');
+    throw new AgentError('network', '連不到本機的伺服器（start.bat 的視窗還開著嗎？）');
+  }
+  if (!r.ok) {
+    let code = String(r.status);
+    try {
+      code = ((await r.json()) as { error?: string }).error ?? code;
+    } catch {
+      /* 不是 JSON */
+    }
+    if (code === 'token') {
+      cached = null;
+      token = '';
+    }
+    throw new AgentError(code, code.startsWith('freesound') ? `Freesound 連不上或回應錯誤（${code}）。可以等一下再試` : (CODE_MSG[code] ?? `伺服器回應 ${code}`));
+  }
+  return r;
+}
+
 export class AgentError extends Error {
   constructor(
     public code: string,

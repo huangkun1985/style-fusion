@@ -66,7 +66,47 @@ export interface Scene {
   theme?: string;
   /** 和 Agent 的對話紀錄 */
   chat?: ChatMsg[];
+  /** 2.0 β：這一場在片子裡放多久（秒）；沒設定＝一個動畫循環。動畫在裡面照樣循環 */
+  dur?: number;
+  /** 進到這一場的轉場：cut 直接切（預設）、fade 淡轉場（長度看 FilmSettings.fade） */
+  trans?: 'cut' | 'fade';
 }
+
+export const SCENE_DUR = { min: 0.5, max: 60 };
+
+/** 片子上的標記（2.0 β，F10）：時間是整支片子的秒數 */
+export interface Marker {
+  id: string;
+  t: number;
+  label: string;
+}
+
+/** 整支片子的設定 */
+export interface FilmSettings {
+  /** 淡轉場長度（秒） */
+  fade: number;
+  /** 決定表第 15 項：picture＝畫面遷就音樂（場景邊緣吸到小節線，預設）；music＝音樂遷就畫面（速度微調，最多 ±6%） */
+  sync: 'picture' | 'music';
+  markers: Marker[];
+}
+export const FILM_DEFAULT: FilmSettings = { fade: 0.4, sync: 'picture', markers: [] };
+export const MAX_MARKERS = 40;
+
+/** 真實音效（2.0 β，F11b）：從 Freesound 下載、修剪、對齊音量之後跟著專案存 */
+export interface SoundAsset {
+  id: string;
+  name: string;
+  author: string;
+  /** CC0／BY／BY-NC */
+  license: string;
+  /** Freesound 的頁面（讀我與規格頁列出來源） */
+  page: string;
+  /** 秒 */
+  dur: number;
+  /** 修剪後的 WAV（base64，單聲道 22.05 kHz 16 位元） */
+  b64: string;
+}
+export const MAX_SOUNDS = 24;
 
 /** 我的配方（舊版叫「收藏」） */
 export interface SavedMix {
@@ -105,6 +145,11 @@ export interface Project {
   migratedFrom?: string;
   /** 匯入的 MIDI 原始檔（base64）；α3 起跟著專案走 */
   midi?: { name: string; b64: string };
+  /** 2.0 β：整支片子的設定（淡轉場、對齊方式、標記） */
+  film?: FilmSettings;
+  /** 2.0 β：真實音效與「哪一種音效換成哪一個檔」 */
+  sounds?: SoundAsset[];
+  sfxMap?: Record<string, string>;
 }
 
 export const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
@@ -203,7 +248,17 @@ export function sanitizeProject(raw: unknown, fallbackTemplate: string): Project
     if (scenes.some((x) => x.id === id)) id = newId();
     const theme = typeof so.theme === 'string' && so.theme.length <= 400_000 ? so.theme : undefined;
     const chat = sanitizeChat(so.chat);
-    scenes.push({ id, name: str(so.name, `場景 ${scenes.length + 1}`, 40), kind: so.kind === 'generated' || so.kind === 'template' ? so.kind : sceneKindOf(mix.subject), mix, ...(theme ? { theme } : {}), ...(chat.length ? { chat } : {}) });
+    const dur = typeof so.dur === 'number' && Number.isFinite(so.dur) ? Math.min(SCENE_DUR.max, Math.max(SCENE_DUR.min, so.dur)) : undefined;
+    scenes.push({
+      id,
+      name: str(so.name, `場景 ${scenes.length + 1}`, 40),
+      kind: so.kind === 'generated' || so.kind === 'template' ? so.kind : sceneKindOf(mix.subject),
+      mix,
+      ...(theme ? { theme } : {}),
+      ...(chat.length ? { chat } : {}),
+      ...(dur ? { dur } : {}),
+      ...(so.trans === 'fade' ? { trans: 'fade' as const } : {}),
+    });
     if (scenes.length >= MAX_SCENES) break;
   }
   if (!scenes.length) return null;
@@ -221,7 +276,47 @@ export function sanitizeProject(raw: unknown, fallbackTemplate: string): Project
     agent: sanitizeAgent(o.agent, fallbackTemplate),
     ...(typeof o.migratedFrom === 'string' ? { migratedFrom: o.migratedFrom.slice(0, 40) } : {}),
     ...(sanitizeMidi(o.midi) ? { midi: sanitizeMidi(o.midi)! } : {}),
+    film: sanitizeFilm(o.film),
+    ...sanitizeSounds(o.sounds, o.sfxMap),
   };
+}
+
+export function sanitizeFilm(raw: unknown): FilmSettings {
+  const o = obj(raw);
+  const fade = typeof o.fade === 'number' && Number.isFinite(o.fade) ? Math.min(2, Math.max(0.1, o.fade)) : FILM_DEFAULT.fade;
+  const markers: Marker[] = [];
+  for (const x of Array.isArray(o.markers) ? o.markers : []) {
+    const m = obj(x);
+    if (typeof m.t !== 'number' || !Number.isFinite(m.t)) continue;
+    markers.push({ id: idOf(m.id), t: Math.max(0, Math.min(600, m.t)), label: typeof m.label === 'string' ? m.label.slice(0, 40) : '' });
+    if (markers.length >= MAX_MARKERS) break;
+  }
+  markers.sort((a, b) => a.t - b.t);
+  return { fade, sync: o.sync === 'music' ? 'music' : 'picture', markers };
+}
+
+const LICENSES = new Set(['CC0', 'BY', 'BY-NC']);
+export function sanitizeSounds(raw: unknown, rawMap: unknown): { sounds?: SoundAsset[]; sfxMap?: Record<string, string> } {
+  const sounds: SoundAsset[] = [];
+  for (const x of Array.isArray(raw) ? raw : []) {
+    const o = obj(x);
+    if (typeof o.b64 !== 'string' || o.b64.length > 3_000_000 || !B64.test(o.b64)) continue;
+    const page = typeof o.page === 'string' && /^https:\/\/freesound\.org\/[\w/.-]*$/.test(o.page) ? o.page : '';
+    sounds.push({
+      id: idOf(o.id),
+      name: str(o.name, '音效', 80),
+      author: str(o.author, '?', 60),
+      license: typeof o.license === 'string' && LICENSES.has(o.license) ? o.license : 'BY',
+      page,
+      dur: typeof o.dur === 'number' && Number.isFinite(o.dur) ? Math.max(0, Math.min(30, o.dur)) : 0,
+      b64: o.b64,
+    });
+    if (sounds.length >= MAX_SOUNDS) break;
+  }
+  const map: Record<string, string> = {};
+  const m = obj(rawMap);
+  for (const [k, v] of Object.entries(m)) if (/^[a-z]{2,12}$/.test(k) && typeof v === 'string' && sounds.some((s) => s.id === v)) map[k] = v;
+  return { ...(sounds.length ? { sounds } : {}), ...(Object.keys(map).length ? { sfxMap: map } : {}) };
 }
 
 const B64 = /^[A-Za-z0-9+/]+={0,2}$/;

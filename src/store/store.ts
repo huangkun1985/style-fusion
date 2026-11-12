@@ -20,7 +20,7 @@ import { isSubjectId, MAX_PER_KIND, sanitizeSels, sanitizeTune } from './sanitiz
 import { cleanMusic, decodeMix, musicOf, type MusicPrefs } from './share';
 
 import type { WallFilter } from '../lib/styleWall';
-import type { AgentDraft, Aspect, ChatMsg, SavedMix, Scene, Stamp } from './project';
+import { FILM_DEFAULT, type AgentDraft, type Aspect, type ChatMsg, type FilmSettings, type SavedMix, type Scene, type SoundAsset, type Stamp } from './project';
 
 export type { Aspect, SavedMix } from './project';
 export type View = 'mixer' | 'library' | 'recipes' | 'saved';
@@ -108,6 +108,15 @@ interface State {
   wallBatch: number;
   /** 目前場景的模板內容欄位（α3 F9）；鍵是「主體.欄位」，只放改過的 */
   content: Record<string, string>;
+  /** 2.0 β：整支片子的設定（淡轉場、對齊方式、標記）；跟著專案存、進復原歷史 */
+  film: FilmSettings;
+  /** 2.0 β：播放整支片子（時鐘是整支的時間）；不存檔 */
+  filmPlay: boolean;
+  /** 2.0 β：真實音效（跟著專案存）與「哪一種音效換成哪一個檔」 */
+  sounds: SoundAsset[];
+  sfxMap: Record<string, string>;
+  /** 全螢幕展示時的規格卡（S 鍵）；不存檔 */
+  specCard: boolean;
 
   set: (p: Partial<State>) => void;
   toggle: (kind: Kind, id: string) => void;
@@ -254,6 +263,11 @@ export const useStore = create<State>()((set, get) => ({
       wallFilter: 'all',
       wallBatch: 1,
       content: {},
+      film: FILM_DEFAULT,
+      filmPlay: false,
+      sounds: [],
+      sfxMap: {},
+      specCard: false,
 
       set: (p) => set(p),
       toggle: (kind, id) => {
